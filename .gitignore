@@ -1,0 +1,17 @@
+# Claude configuration files
+.claude/
+.claude.json
+
+# macOS system files
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.log

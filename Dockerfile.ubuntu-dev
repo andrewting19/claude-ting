@@ -1,0 +1,48 @@
+FROM ubuntu:24.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install essential packages and development tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    vim \
+    neovim \
+    build-essential \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    jq \
+    ripgrep \
+    fd-find \
+    bat \
+    htop \
+    sudo \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Create a non-root user 'dev' with sudo access
+RUN useradd -m -s /bin/bash dev && \
+    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Create workspace directory
+RUN mkdir -p /home/dev/workspace && \
+    chown -R dev:dev /home/dev
+
+# Switch to dev user
+USER dev
+WORKDIR /home/dev/workspace
+
+# Set up basic dev environment
+RUN mkdir -p /home/dev/.local/share/nvim && \
+    mkdir -p /home/dev/.claude
+
+CMD ["/bin/bash"]
