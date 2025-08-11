@@ -1,11 +1,16 @@
 # Claude Docker Setup
 
-This repository contains a Docker setup for running Claude Code CLI in an isolated Ubuntu container with development tools.
+This repository provides a Docker-based setup for running Claude Code CLI in a containerized Ubuntu environment, enabling the use of `--dangerously-skip-permissions` flag for faster, more flexible operation.
 
-## Overview
+## Why Use This?
 
-Instead of installing Claude Code and various development tools directly on your macOS system, this setup:
-- Runs Claude Code inside a Docker container
+**The primary benefit**: Claude Code runs with `--dangerously-skip-permissions` in the container, which:
+- **Saves significant time** by bypassing permission prompts for every file operation
+- **Gives Claude more freedom** to perform operations without constant permission checks
+- **Maintains safety** through containerization - operations are isolated from your host system
+
+Instead of installing Claude Code directly on macOS where permission checks slow down operations, this setup:
+- Runs Claude Code inside a Docker container with full permissions
 - Provides a consistent Ubuntu 24.04 development environment
 - Includes common development tools (git, vim, neovim, python, node, etc.)
 - Mounts your project directory into the container
@@ -50,9 +55,13 @@ Docker Container (ubuntu-dev)
 
 ### Prerequisites
 
-- Docker Desktop for Mac installed and running
-- Zsh shell (default on macOS)
-- Anthropic API key set as `ANTHROPIC_API_KEY` environment variable
+- **macOS** (this setup is designed specifically for Mac users)
+- **Docker Desktop for Mac** installed and running
+- **Zsh shell** (default on macOS)
+- **Anthropic API key** set as `ANTHROPIC_API_KEY` environment variable
+- **Claude Code already configured** on your host system:
+  - `~/.claude` directory exists with your Claude configuration
+  - `~/.claude.json` file exists (optional but recommended)
 
 ### Setup Steps
 
@@ -230,13 +239,22 @@ Claude Code typically uses OAuth authentication, which doesn't work well in Dock
    docker run --rm --user dev -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" -v "$HOME/.claude:/home/dev/.claude" ubuntu-dev bash -c 'echo "test" | claude --dangerously-skip-permissions'
    ```
 
+## Requirements Summary
+
+This setup requires:
+1. **macOS** operating system
+2. **ANTHROPIC_API_KEY** environment variable with valid API key
+3. **Existing Claude Code configuration** on your host (`~/.claude` and optionally `~/.claude.json`)
+4. **Docker Desktop for Mac** installed and running
+
 ## Benefits
 
-1. **Isolation**: Your host system remains clean
-2. **Consistency**: Same environment every time
-3. **Portability**: Easy to recreate on other machines
-4. **Security**: Runs as non-root user in container
-5. **Flexibility**: Easy to add/remove tools by updating Dockerfile
+1. **Speed**: No permission prompts - operations run immediately with `--dangerously-skip-permissions`
+2. **Freedom**: Claude can perform any file operation without asking for permission each time
+3. **Safety**: Container isolation protects your host system from unintended changes
+4. **Consistency**: Same environment every time
+5. **Portability**: Easy to recreate on other machines
+6. **Flexibility**: Easy to add/remove tools by updating Dockerfile
 
 ## Updating
 
