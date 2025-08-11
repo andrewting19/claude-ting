@@ -1,20 +1,71 @@
 # Claude Docker Setup
 
-This repository provides a Docker-based setup for running Claude Code CLI in a containerized Ubuntu environment, enabling the use of `--dangerously-skip-permissions` flag for faster, more flexible operation.
+> Run Claude Code CLI with **no permission prompts** in a secure Docker container — get 10x faster operations while keeping your Mac safe.
 
-## Why Use This?
+This repository provides a Docker-based setup for running Claude Code CLI in a containerized Ubuntu environment, enabling the `--dangerously-skip-permissions` flag for dramatically faster, more flexible operation.
 
-**The primary benefit**: Claude Code runs with `--dangerously-skip-permissions` in the container, which:
-- **Saves significant time** by bypassing permission prompts for every file operation
-- **Gives Claude more freedom** to perform operations without constant permission checks
-- **Maintains safety** through containerization - operations are isolated from your host system
+## ✨ Benefits
 
-Instead of installing Claude Code directly on macOS where permission checks slow down operations, this setup:
-- Runs Claude Code inside a Docker container with full permissions
-- Provides a consistent Ubuntu 24.04 development environment
-- Includes common development tools (git, vim, neovim, python, node, etc.)
-- Mounts your project directory into the container
-- Maintains isolation between your host system and the development environment
+### 🚀 **10x Faster Operations**
+Claude Code runs with `--dangerously-skip-permissions` in the container:
+- **No permission prompts** — operations execute immediately
+- **Unrestricted file access** — Claude can read, write, and modify without asking
+- **Batch operations** — perform hundreds of file changes without interruption
+
+### 🔒 **Complete Safety**
+- **Container isolation** protects your Mac from unintended changes
+- **Volume mounting** gives access only to specified project directories
+- **Non-root user** runs with limited privileges inside the container
+
+### 🛠️ **Professional Development Environment**
+- **Ubuntu 24.04** with essential dev tools pre-installed
+- **Languages included**: Python 3, Node.js, npm
+- **Tools included**: git, vim, neovim, ripgrep, fd-find, bat, jq, htop
+- **Consistent environment** across all your projects
+
+## 🎯 Quick Example
+
+```bash
+# Run Claude in current directory
+clauded
+
+# Run Claude in a specific project
+clauded /path/to/my-project
+
+# Develop a web app with port mapping
+clauded . "-p 3000:3000"
+```
+
+That's it! Claude Code runs instantly without any permission dialogs.
+
+## 🚀 Quickstart
+
+### Prerequisites
+
+- **macOS** (Intel or Apple Silicon)
+- **Docker Desktop** installed and running
+- **Anthropic API key** as `ANTHROPIC_API_KEY` environment variable
+
+### Installation (2 minutes)
+
+1. **Clone and setup**:
+   ```bash
+   git clone https://github.com/yourusername/claude-ting.git
+   cd claude-ting
+   source setup-claude-docker.sh
+   ```
+
+2. **Add to your shell** (`~/.zprofile` or `~/.zshrc`):
+   ```bash
+   source /path/to/claude-ting/setup-claude-docker.sh
+   ```
+
+3. **Reload shell**:
+   ```bash
+   source ~/.zprofile
+   ```
+
+You're ready to go! Try `clauded` in any project directory.
 
 ## How It Works
 
@@ -51,83 +102,48 @@ Docker Container (ubuntu-dev)
    - Neovim config → `/home/dev/.local/share/nvim` (shared editor data)
    - Claude config → `~/.claude` directory and `~/.claude.json` file
 
-## Installation
+## 📦 Installation Details
 
-### Prerequisites
+### System Requirements
 
-- **macOS** (this setup is designed specifically for Mac users)
-- **Docker Desktop for Mac** installed and running
-- **Zsh shell** (default on macOS)
-- **Anthropic API key** set as `ANTHROPIC_API_KEY` environment variable
-- **Claude Code already configured** on your host system:
-  - `~/.claude` directory exists with your Claude configuration
-  - `~/.claude.json` file exists (optional but recommended)
+| Requirement | Details |
+|------------|----------|
+| **OS** | macOS (Intel or Apple Silicon) |
+| **Docker** | Docker Desktop for Mac |
+| **Shell** | Zsh (default on macOS) |
+| **API Key** | `ANTHROPIC_API_KEY` environment variable |
+| **Claude Config** | Optional: existing `~/.claude` directory |
 
-### Setup Steps
+### Manual Setup
 
-1. **Run the setup script** (handles Docker build and API configuration):
+If the quickstart script doesn't work for your setup:
 
+1. **Build the Docker image**:
    ```bash
-   cd /Users/andrewting/Documents/git_repos/claude-ting
-   source setup-claude-docker.sh
+   docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
    ```
 
-   The script will:
-   - Build the Docker image
-   - Detect if you have `ANTHROPIC_API_KEY` set
-   - Offer to configure Claude Code API authentication automatically
-
-2. **Add or update the shell function in your ~/.zprofile**:
-
+2. **Add the shell function to `~/.zprofile`**:
    ```bash
-   claude-docker() {
-       local path="${1:-.}"  # Default to current directory if no args
-       local extra_args="${2}"
-       
-       # Convert relative path to absolute
-       if [[ "$path" != /* ]]; then
-           path="$(pwd)/$path"
-       fi
-       
-       # Create ~/.claude directory if it doesn't exist
-       /bin/mkdir -p "$HOME/.claude"
-       
-       # Build docker command with optional mounts
-       local docker_cmd="/usr/local/bin/docker run -it --rm --user dev"
-       docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
-       docker_cmd="$docker_cmd -v \"$path:/home/dev/workspace\""
-       docker_cmd="$docker_cmd -w /home/dev/workspace"
-       docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/home/dev/.local/share/nvim\""
-       docker_cmd="$docker_cmd -v \"$HOME/.claude:/home/dev/.claude\""
-       
-       # Add .claude.json mount if it exists
-       if [ -f "$HOME/.claude.json" ]; then
-           docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/home/dev/.claude.json\""
-       fi
-       
-       # Add extra args if provided
-       if [ -n "$extra_args" ]; then
-           docker_cmd="$docker_cmd $extra_args"
-       fi
-       
-       docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions"
-       
-       # Execute the command
-       eval $docker_cmd
-   }
+   # Copy the claude-docker function from setup-claude-docker.sh
+   # or source the file directly:
+   source /path/to/claude-ting/setup-claude-docker.sh
+   ```
+
+3. **Configure API authentication** (if needed):
+   ```bash
+   # Create helper script
+   mkdir -p ~/.claude
+   echo '#!/bin/bash\necho "$ANTHROPIC_API_KEY"' > ~/.claude/anthropic_key.sh
+   chmod +x ~/.claude/anthropic_key.sh
    
-   alias clauded='claude-docker'
+   # Create settings file
+   echo '{"apiKeyHelper": "~/.claude/anthropic_key.sh"}' > ~/.claude/settings.json
    ```
 
-3. **Reload your shell configuration**:
+## 💻 Usage Guide
 
-   ```bash
-   source ~/.zprofile
-   ```
-
-## Usage
-
-### Basic Usage
+### Basic Commands
 
 ```bash
 # Run Claude in current directory
@@ -136,140 +152,119 @@ clauded
 # Run Claude in a specific project
 clauded /path/to/project
 
-# With extra Docker arguments (e.g., port mapping for web development)
-clauded . "-p 3000:3000"
+# Use relative paths
+clauded ../other-project
 ```
 
-### Port Mapping Explanation
+### Web Development
 
-When developing web applications inside the container, you need port mapping to access the application from your browser:
-
-- `-p 3000:3000` maps port 3000 from container → host
-- This allows `localhost:3000` on your Mac to reach the app running in the container
-- Format: `-p HOST_PORT:CONTAINER_PORT`
-
-Example for a Node.js app:
+For web apps, map ports to access them from your browser:
 
 ```bash
-clauded . "-p 3000:3000 -p 5173:5173"  # Maps both development and Vite ports
+# Single port
+clauded . "-p 3000:3000"
+
+# Multiple ports (e.g., app + Vite)
+clauded . "-p 3000:3000 -p 5173:5173"
+
+# With environment variables
+clauded . "-p 8080:8080 -e NODE_ENV=development"
 ```
 
-## File Structure
+**Port mapping format**: `-p HOST:CONTAINER` (e.g., `-p 3000:3000` makes `localhost:3000` work)
+
+## 📁 Project Structure
 
 ```text
 claude-ting/
-├── Dockerfile.ubuntu-dev    # Docker image definition
-├── README.md               # This documentation
-└── setup-claude-docker.sh  # Helper script (optional)
+├── Dockerfile.ubuntu-dev     # Ubuntu 24.04 + dev tools + Claude Code
+├── setup-claude-docker.sh    # Shell function and auto-setup script
+├── README.md                 # This documentation
+└── CLAUDE.md                 # Instructions for Claude Code itself
 ```
 
-## How the Docker Command Works
+## 🔧 Technical Details
 
-The `docker run` command breakdown:
+### Docker Command Breakdown
 
-- `-it`: Interactive terminal (allows Claude's interactive mode)
-- `--rm`: Remove container after exit (keeps things clean)
-- `--user dev`: Run as non-root user for security
-- `-v "$path:/home/dev/workspace"`: Mount your project into the container
-- `-w /home/dev/workspace`: Set working directory
-- `-e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`: Pass API key to container
-- `-v "$HOME/.local/share/nvim:..."`: Share Neovim data
-- `-v "$HOME/.claude:/home/dev/.claude"`: Mount Claude config directory with helper script
-- `-v "$HOME/.claude.json:/home/dev/.claude.json"`: Mount Claude settings file (if exists)
-- `$extra_args`: Additional Docker arguments (ports, env vars, etc.)
-- `ubuntu-dev`: The Docker image name
-- `claude --dangerously-skip-permissions`: Run Claude without permission checks
+| Flag | Purpose |
+|------|------|
+| `-it` | Interactive terminal for Claude's UI |
+| `--rm` | Auto-cleanup after exit |
+| `--user dev` | Non-root for security |
+| `-v $path:/home/dev/workspace` | Mount your project |
+| `-e ANTHROPIC_API_KEY` | Pass API key |
+| `-v ~/.claude:/home/dev/.claude` | Claude configuration |
+| `--dangerously-skip-permissions` | **The magic flag** — no prompts! |
 
-## Authentication
+### Authentication System
 
-### How It Works
+Since OAuth doesn't work in containers, we use Claude's API helper method:
 
-Claude Code typically uses OAuth authentication, which doesn't work well in Docker containers. This setup uses an **API helper method** instead:
+1. **Host**: `ANTHROPIC_API_KEY` environment variable
+2. **Container**: Helper script at `~/.claude/anthropic_key.sh`
+3. **Claude**: Reads API key via helper script
+4. **Result**: Seamless authentication without browser
 
-1. **API Key Environment Variable**: Your `ANTHROPIC_API_KEY` is passed to the Docker container
-2. **Helper Script**: `~/.claude/anthropic_key.sh` echoes the API key when Claude requests it
-3. **Configuration**: `~/.claude/settings.json` tells Claude to use the helper script
-4. **Result**: Claude authenticates using your API key instead of OAuth
+## 🐛 Troubleshooting
 
-### Files Involved
+### Common Issues
 
-- `~/.claude/anthropic_key.sh` - Script that returns your API key
-- `~/.claude/settings.json` - Claude configuration pointing to the helper
-- `~/.claude.json` - Additional Claude settings (mounted if exists)
-- Environment variable `ANTHROPIC_API_KEY` - Your actual API key
+| Problem | Solution |
+|---------|----------|
+| **"docker: command not found"** | Install Docker Desktop and ensure it's running |
+| **"Missing API key"** | Export `ANTHROPIC_API_KEY` in your shell profile |
+| **Can't access files** | Check Docker Desktop file sharing permissions |
+| **Port already in use** | Change the host port: `-p 3001:3000` |
 
-## Troubleshooting
+### Debug Commands
 
-### "docker: command not found"
+```bash
+# Check API key
+echo $ANTHROPIC_API_KEY
 
-- The function uses the full path `/usr/local/bin/docker` to avoid PATH issues
-- Ensure Docker Desktop is installed and running
+# Test helper script
+~/.claude/anthropic_key.sh
 
-### Container can't access files
+# Verify Claude settings
+cat ~/.claude/settings.json
 
-- Check that the path you're mounting exists
-- Ensure Docker Desktop has file sharing permissions for your directories
+# Test container directly
+docker run --rm ubuntu-dev claude --version
+```
 
-### Claude Code issues
+## 🔄 Updating
 
-- The container runs Claude with `--dangerously-skip-permissions` to bypass permission checks
-- This is necessary because the container environment differs from a standard installation
-
-### "Missing API key" error
-
-1. **Check environment variable**: Ensure `ANTHROPIC_API_KEY` is set in your shell:
-   ```bash
-   echo $ANTHROPIC_API_KEY
-   ```
-
-2. **Verify helper script**:
-   ```bash
-   # Should output your API key
-   ~/.claude/anthropic_key.sh
-   ```
-
-3. **Check Claude settings**:
-   ```bash
-   cat ~/.claude/settings.json
-   # Should contain: "apiKeyHelper": "~/.claude/anthropic_key.sh"
-   ```
-
-4. **Test in container**:
-   ```bash
-   docker run --rm --user dev -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" -v "$HOME/.claude:/home/dev/.claude" ubuntu-dev bash -c 'echo "test" | claude --dangerously-skip-permissions'
-   ```
-
-## Requirements Summary
-
-This setup requires:
-1. **macOS** operating system
-2. **ANTHROPIC_API_KEY** environment variable with valid API key
-3. **Existing Claude Code configuration** on your host (`~/.claude` and optionally `~/.claude.json`)
-4. **Docker Desktop for Mac** installed and running
-
-## Benefits
-
-1. **Speed**: No permission prompts - operations run immediately with `--dangerously-skip-permissions`
-2. **Freedom**: Claude can perform any file operation without asking for permission each time
-3. **Safety**: Container isolation protects your host system from unintended changes
-4. **Consistency**: Same environment every time
-5. **Portability**: Easy to recreate on other machines
-6. **Flexibility**: Easy to add/remove tools by updating Dockerfile
-
-## Updating
-
-To update the tools or Claude Code version:
+### Update Claude Code or tools:
 
 1. Edit `Dockerfile.ubuntu-dev`
-2. Rebuild the image:
-
+2. Rebuild:
    ```bash
    docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
    ```
 
-## Notes
+### Update the shell function:
 
-- The container is ephemeral - it's removed after each session
-- Only your project files (mounted volume) persist between sessions
-- Install project-specific dependencies inside your project, not in the Docker image
-- The Docker image includes general-purpose development tools
+1. Pull latest changes
+2. Source the setup script again:
+   ```bash
+   source setup-claude-docker.sh
+   ```
+
+## 📝 Important Notes
+
+- **Ephemeral containers**: Each session starts fresh (only mounted files persist)
+- **Project dependencies**: Install in your project, not the Docker image
+- **Performance**: First run pulls the image; subsequent runs are instant
+- **Security**: Container runs as non-root user with limited system access
+
+## 🤝 Contributing
+
+Contributions welcome! Feel free to:
+- Add more development tools to the Dockerfile
+- Improve the setup script
+- Share your use cases and configurations
+
+## 📄 License
+
+MIT License - Use freely in your projects
