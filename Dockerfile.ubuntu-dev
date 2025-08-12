@@ -26,23 +26,25 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
+# Install yarn globally
+RUN npm install -g yarn
+
 # Install Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
-# Create a non-root user 'dev' with sudo access
-RUN useradd -m -s /bin/bash dev && \
-    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Configure git globally to handle ownership issues
+RUN git config --system --add safe.directory '*'
 
 # Create workspace directory
-RUN mkdir -p /home/dev/workspace && \
-    chown -R dev:dev /home/dev
+RUN mkdir -p /workspace
 
-# Switch to dev user
-USER dev
-WORKDIR /home/dev/workspace
+# Set up basic environment
+RUN mkdir -p /root/.local/share/nvim && \
+    mkdir -p /root/.claude
 
-# Set up basic dev environment
-RUN mkdir -p /home/dev/.local/share/nvim && \
-    mkdir -p /home/dev/.claude
+# Set sandbox environment variable
+ENV IS_SANDBOX=1
+
+WORKDIR /workspace
 
 CMD ["/bin/bash"]

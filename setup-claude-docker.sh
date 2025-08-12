@@ -71,16 +71,16 @@ claude-docker() {
     /bin/mkdir -p "$HOME/.claude"
     
     # Build docker command with optional mounts
-    local docker_cmd="/usr/local/bin/docker run -it --rm --user dev"
+    local docker_cmd="/usr/local/bin/docker run -it --rm"
     docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
-    docker_cmd="$docker_cmd -v \"$path:/home/dev/workspace\""
-    docker_cmd="$docker_cmd -w /home/dev/workspace"
-    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/home/dev/.local/share/nvim\""
-    docker_cmd="$docker_cmd -v \"$HOME/.claude:/home/dev/.claude\""
+    docker_cmd="$docker_cmd -v \"$path:/workspace\""
+    docker_cmd="$docker_cmd -w /workspace"
+    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
+    docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
     
     # Add .claude.json mount if it exists
     if [ -f "$HOME/.claude.json" ]; then
-        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/home/dev/.claude.json\""
+        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.json\""
     fi
     
     # Add extra args if provided
@@ -95,7 +95,7 @@ claude-docker() {
 }
 
 # Alias for easier access
-alias claude-in-docker='claude-docker'
+alias clauded='claude-docker'
 
 EOF
 
