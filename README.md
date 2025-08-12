@@ -197,6 +197,10 @@ claude-ting/
 | `-v ~/.claude:/home/dev/.claude` | Claude configuration |
 | `--dangerously-skip-permissions` | **The magic flag** — no prompts! |
 
+### IS_SANDBOX Environment Variable
+
+**Important**: The `IS_SANDBOX=true` environment variable is required when running Claude Code with `--dangerously-skip-permissions` while having root/sudo access in the container. This is automatically set in the Docker image to ensure Claude Code accepts the flag in the containerized environment.
+
 ### Authentication System
 
 Since OAuth doesn't work in containers, we use Claude's API helper method:
@@ -205,6 +209,12 @@ Since OAuth doesn't work in containers, we use Claude's API helper method:
 2. **Container**: Helper script at `~/.claude/anthropic_key.sh`
 3. **Claude**: Reads API key via helper script
 4. **Result**: Seamless authentication without browser
+
+**Note on Authentication Methods**: Claude may display a warning about "conflicting authentication methods" because both the `ANTHROPIC_API_KEY` environment variable and the API helper script are present. This warning is harmless since both methods use the same API key. The key difference is:
+- **Direct environment variable**: Requires manual confirmation (y/n) during Docker build
+- **API helper script**: Works automatically without user interaction
+
+We use the helper script approach for a smoother experience. The environment variable could be renamed to avoid the warning, but since it doesn't affect functionality, we keep the standard `ANTHROPIC_API_KEY` name for simplicity.
 
 ## 🐛 Troubleshooting
 
