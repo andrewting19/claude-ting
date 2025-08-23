@@ -13,8 +13,6 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     python3 \
     python3-pip \
-    nodejs \
-    npm \
     jq \
     ripgrep \
     fd-find \
@@ -25,6 +23,10 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22 from NodeSource repository
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
 # Install yarn globally
 RUN npm install -g yarn
