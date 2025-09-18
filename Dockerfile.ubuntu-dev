@@ -58,10 +58,13 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     nvm alias default $NODE_VERSION && \
     nvm use default && \
     npm install -g yarn && \
+    npm install -g tsx && \
     npm install -g @anthropic-ai/claude-code && \
     ln -s \$(which node) /usr/local/bin/node && \
     ln -s \$(which npm) /usr/local/bin/npm && \
+    ln -s \$(which npx) /usr/local/bin/npx && \
     ln -s \$(which yarn) /usr/local/bin/yarn && \
+    ln -s \$(which tsx) /usr/local/bin/tsx && \
     ln -s \$(which claude) /usr/local/bin/claude"
 
 # Configure git globally to handle ownership issues
