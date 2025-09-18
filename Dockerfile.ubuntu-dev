@@ -11,8 +11,6 @@ RUN apt-get update && apt-get install -y \
     vim \
     neovim \
     build-essential \
-    python3 \
-    python3-pip \
     jq \
     ripgrep \
     fd-find \
@@ -22,17 +20,49 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
+    # Dependencies for pyenv
+    libbz2-dev \
+    libffi-dev \
+    liblzma-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    llvm \
+    tk-dev \
+    xz-utils \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 22 from NodeSource repository
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs
+# Install pyenv
+ENV PYENV_ROOT=/opt/pyenv
+ENV PATH=$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH
+RUN git clone --depth=1 https://github.com/pyenv/pyenv.git $PYENV_ROOT && \
+    cd $PYENV_ROOT && \
+    src/configure && \
+    make -C src && \
+    pyenv install 3.12 && \
+    pyenv global 3.12
 
-# Install yarn globally
-RUN npm install -g yarn
+# Install nvm and Node.js
+ENV NVM_DIR=/opt/nvm
+ENV NODE_VERSION=22
+RUN mkdir -p $NVM_DIR && \
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install Node.js and global packages using nvm in a single RUN command
+# Also create symlinks for global access
+RUN bash -c "source $NVM_DIR/nvm.sh && \
+    nvm install $NODE_VERSION && \
+    nvm alias default $NODE_VERSION && \
+    nvm use default && \
+    npm install -g yarn && \
+    npm install -g @anthropic-ai/claude-code && \
+    ln -s \$(which node) /usr/local/bin/node && \
+    ln -s \$(which npm) /usr/local/bin/npm && \
+    ln -s \$(which yarn) /usr/local/bin/yarn && \
+    ln -s \$(which claude) /usr/local/bin/claude"
 
 # Configure git globally to handle ownership issues
 RUN git config --system --add safe.directory '*'
@@ -46,6 +76,17 @@ RUN mkdir -p /root/.local/share/nvim && \
 
 # Set sandbox environment variable
 ENV IS_SANDBOX=1
+
+# Create shell initialization script for pyenv and nvm
+RUN echo '# Pyenv initialization' >> /etc/bash.bashrc && \
+    echo 'export PYENV_ROOT=/opt/pyenv' >> /etc/bash.bashrc && \
+    echo 'export PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"' >> /etc/bash.bashrc && \
+    echo 'eval "$(pyenv init -)"' >> /etc/bash.bashrc && \
+    echo '' >> /etc/bash.bashrc && \
+    echo '# NVM initialization' >> /etc/bash.bashrc && \
+    echo 'export NVM_DIR=/opt/nvm' >> /etc/bash.bashrc && \
+    echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /etc/bash.bashrc && \
+    echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> /etc/bash.bashrc
 
 WORKDIR /workspace
 
