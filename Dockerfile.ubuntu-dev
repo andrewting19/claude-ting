@@ -77,7 +77,7 @@ ENV PATH="/root/.bun/bin:$PATH"
 
 # Configure git globally to handle ownership issues and set default credentials
 RUN git config --system --add safe.directory '*' && \
-    git config --system user.email "claude@anthropic.com" && \
+    git config --system user.email "andrewtingnyc@gmail.com" && \
     git config --system user.name "Claude Ting"
 
 # Create workspace directory
