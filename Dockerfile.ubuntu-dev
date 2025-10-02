@@ -20,6 +20,10 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
+    # Audio tools for notifications from container
+    pulseaudio-utils \
+    alsa-utils \
+    sox \
     # Dependencies for pyenv
     libbz2-dev \
     libffi-dev \
@@ -67,8 +71,14 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     ln -s \$(which tsx) /usr/local/bin/tsx && \
     ln -s \$(which claude) /usr/local/bin/claude"
 
-# Configure git globally to handle ownership issues
-RUN git config --system --add safe.directory '*'
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:$PATH"
+
+# Configure git globally to handle ownership issues and set default credentials
+RUN git config --system --add safe.directory '*' && \
+    git config --system user.email "claude@anthropic.com" && \
+    git config --system user.name "Claude Ting"
 
 # Create workspace directory
 RUN mkdir -p /workspace

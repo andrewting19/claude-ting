@@ -82,7 +82,7 @@ claude-docker() {
     if [ -f "$HOME/.claude.json" ]; then
         docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.json\""
     fi
-    
+
     # Add extra args if provided
     if [ -n "$extra_args" ]; then
         docker_cmd="$docker_cmd $extra_args"
