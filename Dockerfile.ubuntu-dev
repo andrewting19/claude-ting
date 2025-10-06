@@ -102,6 +102,45 @@ RUN echo '# Pyenv initialization' >> /etc/bash.bashrc && \
     echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /etc/bash.bashrc && \
     echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> /etc/bash.bashrc
 
+# Create entrypoint script to merge OAuth credentials from host
+RUN cat > /entrypoint.sh << 'EOF'
+#!/bin/bash
+
+# Merge Claude OAuth config from host file if available
+if [ -f "/root/.claude.host.json" ]; then
+  # Extract OAuth and user data from host config
+  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache"
+
+  # Build jq expression for extraction
+  JQ_EXPR=""
+  for key in $CONFIG_KEYS; do
+    if [ -n "$JQ_EXPR" ]; then JQ_EXPR="$JQ_EXPR, "; fi
+    JQ_EXPR="$JQ_EXPR\"$key\": .$key"
+  done
+
+  # Extract config data and add bypass permissions
+  HOST_CONFIG=$(jq -c "{$JQ_EXPR, \"bypassPermissionsModeAccepted\": true}" /root/.claude.host.json 2>/dev/null || echo "")
+
+  if [ -n "$HOST_CONFIG" ] && [ "$HOST_CONFIG" != "null" ] && [ "$HOST_CONFIG" != "{}" ]; then
+    if [ -f "/root/.claude.json" ]; then
+      # Merge with existing container file
+      jq ". * $HOST_CONFIG" /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+      echo "✓ OAuth credentials merged from host"
+    else
+      # Create new container file with host config
+      echo "$HOST_CONFIG" | jq . > /root/.claude.json
+      echo "✓ OAuth credentials imported from host"
+    fi
+  fi
+fi
+
+# Execute the command
+exec "$@"
+EOF
+
+RUN chmod +x /entrypoint.sh
+
 WORKDIR /workspace
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/bin/bash"]
