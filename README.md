@@ -15,11 +15,11 @@ Claude Code runs with `--dangerously-skip-permissions` in the container:
 ### 🔒 **Complete Safety**
 - **Container isolation** protects your Mac from unintended changes
 - **Volume mounting** gives access only to specified project directories
-- **Non-root user** runs with limited privileges inside the container
+- **Ephemeral environment** resets between sessions
 
 ### 🛠️ **Professional Development Environment**
 - **Ubuntu 24.04** with essential dev tools pre-installed
-- **Languages included**: Python 3, Node.js, npm
+- **Languages included**: Python 3.12, Node.js 22, Bun
 - **Tools included**: git, vim, neovim, ripgrep, fd-find, bat, jq, htop
 - **Consistent environment** across all your projects
 
@@ -44,25 +44,29 @@ That's it! Claude Code runs instantly without any permission dialogs.
 
 - **macOS** (Intel or Apple Silicon)
 - **Docker Desktop** installed and running
-- **Anthropic API key** as `ANTHROPIC_API_KEY` environment variable
+- **Claude account** for authentication
 
 ### Installation (2 minutes)
 
-1. **Clone and setup**:
+1. **Clone and build**:
    ```bash
    git clone https://github.com/yourusername/claude-ting.git
    cd claude-ting
-   source setup-claude-docker.sh
+   docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
    ```
 
-2. **Add to your shell** (`~/.zprofile` or `~/.zshrc`):
+2. **Add function to your shell** (`~/.zshrc`):
    ```bash
-   source /path/to/claude-ting/setup-claude-docker.sh
+   # Copy the claude-docker function from setup-claude-docker.sh
+   # or add it manually (see CLAUDE.md for the function code)
    ```
 
-3. **Reload shell**:
+3. **First-time authentication**:
    ```bash
-   source ~/.zprofile
+   clauded
+   # Inside container:
+   /login
+   # Follow the browser OAuth flow
    ```
 
 You're ready to go! Try `clauded` in any project directory.
@@ -86,21 +90,22 @@ Docker Container (ubuntu-dev)
 1. **Dockerfile.ubuntu-dev**: Defines the Docker image with:
    - Ubuntu 24.04 as base
    - Essential development tools (git, vim, neovim, build-essential)
-   - Programming languages (Python 3, Node.js, npm)
+   - Programming languages (Python 3.12, Node.js 22, Bun)
    - Utilities (ripgrep, fd-find, bat, jq, htop)
    - Claude Code CLI (`@anthropic-ai/claude-code`)
-   - A non-root user `dev` for security
+   - Entrypoint script for OAuth credential merging
 
 2. **Shell Function (`claude-docker`)**: A Zsh function that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
-   - Runs the Docker container with appropriate volume mounts
+   - Mounts OAuth credentials from host for automatic authentication
    - Passes through to Claude with `--dangerously-skip-permissions` flag
 
 3. **Volume Mounts**:
-   - Project directory → `/home/dev/workspace` (working directory)
-   - Neovim config → `/home/dev/.local/share/nvim` (shared editor data)
-   - Claude config → `~/.claude` directory and `~/.claude.json` file
+   - Project directory → `/workspace` (working directory)
+   - Neovim config → `/root/.local/share/nvim` (shared editor data)
+   - Claude config → `~/.claude` directory (OAuth persistence)
+   - Host OAuth credentials → `/root/.claude.host.json` (read-only merge source)
 
 ## 📦 Installation Details
 
@@ -111,35 +116,7 @@ Docker Container (ubuntu-dev)
 | **OS** | macOS (Intel or Apple Silicon) |
 | **Docker** | Docker Desktop for Mac |
 | **Shell** | Zsh (default on macOS) |
-| **API Key** | `ANTHROPIC_API_KEY` environment variable |
-| **Claude Config** | Optional: existing `~/.claude` directory |
-
-### Manual Setup
-
-If the quickstart script doesn't work for your setup:
-
-1. **Build the Docker image**:
-   ```bash
-   docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
-   ```
-
-2. **Add the shell function to `~/.zprofile`**:
-   ```bash
-   # Copy the claude-docker function from setup-claude-docker.sh
-   # or source the file directly:
-   source /path/to/claude-ting/setup-claude-docker.sh
-   ```
-
-3. **Configure API authentication** (if needed):
-   ```bash
-   # Create helper script
-   mkdir -p ~/.claude
-   echo '#!/bin/bash\necho "$ANTHROPIC_API_KEY"' > ~/.claude/anthropic_key.sh
-   chmod +x ~/.claude/anthropic_key.sh
-   
-   # Create settings file
-   echo '{"apiKeyHelper": "~/.claude/anthropic_key.sh"}' > ~/.claude/settings.json
-   ```
+| **Authentication** | Claude account (OAuth) or API key (optional) |
 
 ## 💻 Usage Guide
 
@@ -191,30 +168,29 @@ claude-ting/
 |------|------|
 | `-it` | Interactive terminal for Claude's UI |
 | `--rm` | Auto-cleanup after exit |
-| `--user dev` | Non-root for security |
-| `-v $path:/home/dev/workspace` | Mount your project |
-| `-e ANTHROPIC_API_KEY` | Pass API key |
-| `-v ~/.claude:/home/dev/.claude` | Claude configuration |
+| `-v $path:/workspace` | Mount your project |
+| `-v ~/.claude.json:/root/.claude.host.json:ro` | OAuth credential source (read-only) |
+| `-v ~/.claude:/root/.claude` | Claude configuration (persistent) |
 | `--dangerously-skip-permissions` | **The magic flag** — no prompts! |
 
 ### IS_SANDBOX Environment Variable
 
-**Important**: The `IS_SANDBOX=true` environment variable is required when running Claude Code with `--dangerously-skip-permissions` while having root/sudo access in the container. This is automatically set in the Docker image to ensure Claude Code accepts the flag in the containerized environment.
+The `IS_SANDBOX=1` environment variable is set in the Docker image to ensure Claude Code accepts the `--dangerously-skip-permissions` flag in the containerized environment.
 
 ### Authentication System
 
-Since OAuth doesn't work in containers, we use Claude's API helper method:
+Two authentication methods are supported:
 
-1. **Host**: `ANTHROPIC_API_KEY` environment variable
-2. **Container**: Helper script at `~/.claude/anthropic_key.sh`
-3. **Claude**: Reads API key via helper script
-4. **Result**: Seamless authentication without browser
+**OAuth (Recommended)**
+1. **First time**: Run `/login` inside container, authenticate via browser
+2. **OAuth tokens**: Saved to `~/.claude.json` on host
+3. **Subsequent runs**: Entrypoint script merges OAuth credentials into container
+4. **Result**: Seamless authentication across all containers
 
-**Note on Authentication Methods**: Claude may display a warning about "conflicting authentication methods" because both the `ANTHROPIC_API_KEY` environment variable and the API helper script are present. This warning is harmless since both methods use the same API key. The key difference is:
-- **Direct environment variable**: Requires manual confirmation (y/n) during Docker build
-- **API helper script**: Works automatically without user interaction
-
-We use the helper script approach for a smoother experience. The environment variable could be renamed to avoid the warning, but since it doesn't affect functionality, we keep the standard `ANTHROPIC_API_KEY` name for simplicity.
+**API Key (Optional)**
+- Set `ANTHROPIC_API_KEY` environment variable on host
+- Automatically passed through to container if present
+- Useful for CI/CD or automated workflows
 
 ## 🐛 Troubleshooting
 
@@ -223,21 +199,20 @@ We use the helper script approach for a smoother experience. The environment var
 | Problem | Solution |
 |---------|----------|
 | **"docker: command not found"** | Install Docker Desktop and ensure it's running |
-| **"Missing API key"** | Export `ANTHROPIC_API_KEY` in your shell profile |
+| **Authentication failed** | Run `clauded` then `/login` inside container |
 | **Can't access files** | Check Docker Desktop file sharing permissions |
 | **Port already in use** | Change the host port: `-p 3001:3000` |
 
 ### Debug Commands
 
 ```bash
-# Check API key
-echo $ANTHROPIC_API_KEY
+# Check if OAuth credentials exist
+ls -la ~/.claude.json
 
-# Test helper script
-~/.claude/anthropic_key.sh
-
-# Verify Claude settings
-cat ~/.claude/settings.json
+# Verify Claude auth status
+clauded
+# Inside container:
+claude auth status
 
 # Test container directly
 docker run --rm ubuntu-dev claude --version
@@ -263,10 +238,10 @@ docker run --rm ubuntu-dev claude --version
 
 ## 📝 Important Notes
 
-- **Ephemeral containers**: Each session starts fresh (only mounted files persist)
+- **Ephemeral containers**: Each session starts fresh (mounted files and OAuth credentials persist)
 - **Project dependencies**: Install in your project, not the Docker image
-- **Performance**: First run pulls the image; subsequent runs are instant
-- **Security**: Container runs as non-root user with limited system access
+- **Performance**: First build takes ~5 minutes; subsequent runs are instant
+- **Security**: Container isolation protects your Mac from unintended changes
 
 ## 🤝 Contributing
 

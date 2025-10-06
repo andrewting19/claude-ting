@@ -15,39 +15,34 @@ The project consists of three main components:
 
 ## Authentication Setup
 
-### Problem
-Claude Code CLI uses OAuth by default, which requires browser-based authentication. This doesn't work well in Docker containers where browser access may be limited or unavailable.
+Two authentication methods are supported: OAuth (recommended) and API key (optional).
 
-### Solution
-The project uses Claude Code's API helper method with a custom script that provides the API key from an environment variable. This allows seamless authentication within the containerized environment.
+### OAuth Authentication (Recommended)
 
-### Implementation Details
+OAuth credentials from your host machine are automatically synced to the container via an entrypoint script.
 
-#### Helper Script
-A shell script at `~/.claude/anthropic_key.sh` that echoes the API key:
+**How It Works:**
+1. Host's `~/.claude.json` is mounted read-only as `/root/.claude.host.json`
+2. Entrypoint script extracts OAuth tokens (`oauthAccount`, `userID`, etc.)
+3. Credentials are merged into container's `/root/.claude.json` at startup
+4. `~/.claude` directory is mounted read-write to persist authentication
+
+**First-Time Setup:**
 ```bash
-#!/bin/bash
-echo "$ANTHROPIC_API_KEY"
+# Option 1: Authenticate on host (recommended)
+claude auth login
+
+# Option 2: Authenticate in container (first run only)
+claude-docker .
+# Inside container:
+/login
 ```
 
-#### Claude Configuration
-The `~/.claude/settings.json` file is configured to use the helper script:
-```json
-{
-  "apiKeyHelper": "~/.claude/anthropic_key.sh"
-}
-```
+Once authenticated, all future containers automatically have access.
 
-#### Environment Variable Passing
-The `claude-docker` function passes the host's `ANTHROPIC_API_KEY` environment variable to the container:
-```bash
--e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
-```
+### API Key Authentication (Optional)
 
-### Requirements
-- User must have `ANTHROPIC_API_KEY` set in their shell environment
-- The API key must be a valid Anthropic API key with appropriate permissions
-- The helper script and settings files are automatically created during Docker image build
+If `ANTHROPIC_API_KEY` is set in your shell environment, it will be automatically passed through to the container. Useful for CI/CD or automated workflows.
 
 ## Common Commands
 
@@ -60,29 +55,27 @@ docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
 ### Testing Changes
 ```bash
 # Test the Docker container directly
-docker run -it --rm --user dev -v "$(pwd):/home/dev/workspace" -w /home/dev/workspace ubuntu-dev /bin/bash
+docker run -it --rm -v "$(pwd):/workspace" -w /workspace ubuntu-dev /bin/bash
 
-# Test Claude Code in the container
-docker run -it --rm --user dev -v "$(pwd):/home/dev/workspace" -w /home/dev/workspace ubuntu-dev claude --dangerously-skip-permissions
+# Test with the shell function
+source ~/.zshrc
+claude-docker .
 ```
 
 ## Key Implementation Details
 
 ### Docker Configuration
 - Base image: Ubuntu 24.04
-- Non-root user: `dev` with sudo access
-- Working directory: `/home/dev/workspace`
+- Working directory: `/workspace`
+- Entrypoint script handles OAuth credential merging at startup
 - Claude Code runs with `--dangerously-skip-permissions` flag due to container environment constraints
 
-### Shell Function Path Handling
-The `claude-docker` function in setup-claude-docker.sh handles both relative and absolute paths by converting relative paths to absolute before mounting:
-```bash
-if [[ "$path" != /* ]]; then
-    path="$(pwd)/$path"
-fi
-```
-
-The function uses full paths for system commands (`/bin/mkdir`, `/usr/local/bin/docker`) to avoid PATH issues on macOS and builds the Docker command dynamically using `eval` to properly handle optional volume mounts (like `.claude.json`).
+### Shell Function
+The `claude-docker` function in `~/.zshrc` handles:
+- **Path conversion**: Relative paths are converted to absolute before mounting
+- **OAuth credential mounting**: `~/.claude.json` is mounted read-only as `/root/.claude.host.json`
+- **Persistence**: `~/.claude` directory is mounted read-write for auth persistence
+- **Full paths**: Uses `/usr/local/bin/docker` to avoid PATH issues on macOS
 
 ### Port Mapping Support
 
