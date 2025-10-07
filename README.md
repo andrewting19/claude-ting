@@ -253,3 +253,6 @@ Contributions welcome! Feel free to:
 ## 📄 License
 
 MIT License - Use freely in your projects
+
+
+## Credit to this repo for auth hack: https://github.com/icanhasjonas/run-claude-docker/tree/main?tab=readme-ov-file#authentication-issues
