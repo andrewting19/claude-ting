@@ -156,6 +156,7 @@ clauded . "-p 8080:8080 -e NODE_ENV=development"
 ```text
 claude-ting/
 ├── Dockerfile.ubuntu-dev     # Ubuntu 24.04 + dev tools + Claude Code
+├── dev-sessions/             # Gateway, MCP client, and docs for dev handoff sessions
 ├── setup-claude-docker.sh    # Shell function and auto-setup script
 ├── README.md                 # This documentation
 └── CLAUDE.md                 # Instructions for Claude Code itself

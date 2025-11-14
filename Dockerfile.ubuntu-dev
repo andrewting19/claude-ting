@@ -77,7 +77,7 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
 # Install dev-sessions-mcp
-COPY dev-sessions-mcp /opt/dev-sessions-mcp
+COPY dev-sessions/mcp /opt/dev-sessions-mcp
 RUN bash -c "source $NVM_DIR/nvm.sh && \
     cd /opt/dev-sessions-mcp && \
     npm install && \

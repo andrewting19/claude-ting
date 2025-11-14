@@ -8,8 +8,11 @@ const app = express();
 const PORT = process.env.PORT || 6767;
 const MAX_SESSIONS_PER_CREATOR = parseInt(process.env.MAX_SESSIONS_PER_CREATOR || '10', 10);
 
-// Get SSH user from environment (needed for SSH to host)
+// Get SSH connection info from environment (needed for SSH to host)
 const SSH_USER = process.env.SSH_USER || process.env.USER;
+const SSH_HOST = process.env.SSH_HOST || 'host.docker.internal';
+const SSH_PORT = parseInt(process.env.SSH_PORT || '22', 10);
+
 if (!SSH_USER) {
   console.error('ERROR: SSH_USER environment variable must be set');
   process.exit(1);
@@ -17,7 +20,7 @@ if (!SSH_USER) {
 
 // Initialize database and tmux executor
 const db = new SessionDatabase();
-const tmux = new TmuxExecutor('host.docker.internal', SSH_USER);
+const tmux = new TmuxExecutor(SSH_HOST, SSH_USER, SSH_PORT);
 
 // Middleware
 app.use(cors());
@@ -306,7 +309,7 @@ async function pruneDeletedSessions() {
 app.listen(PORT, async () => {
   console.log(`🚀 Dev Sessions Gateway running on port ${PORT}`);
   console.log(`📊 Database ready`);
-  console.log(`🔗 SSH target: ${SSH_USER}@host.docker.internal`);
+  console.log(`🔗 SSH target: ${SSH_USER}@${SSH_HOST}:${SSH_PORT}`);
 
   // Prune stale sessions on startup
   console.log('🧹 Pruning stale sessions...');

@@ -1,161 +1,112 @@
 # Quick Start - Dev Sessions
 
-Get the Claude handoff system running in 5 minutes.
+Bring up the Claude handoff system in just a few minutes.
 
-## 1. Setup SSH (30 seconds)
-
-```bash
-cd /Users/andrew/Documents/git_repos/claude-ting/setup-scripts
-./setup-gateway-ssh.sh
-```
-
-Follow the prompts. This enables SSH and creates keys.
-
-## 2. Build & Start Gateway (2 minutes)
-
-```bash
-cd /Users/andrew/Documents/git_repos/claude-ting/gateway-server
-
-# Build the gateway Docker image
-docker build -t dev-sessions-gateway .
-
-# Start the gateway server
-docker run -d \
-  --name dev-sessions-gateway \
-  -p 3000:3000 \
-  -v ~/.ssh/claude_gateway:/root/.ssh/id_ed25519:ro \
-  -v ~/dev-sessions-gateway.db:/data/sessions.db \
-  -e SSH_USER=$USER \
-  dev-sessions-gateway
-
-# Verify it's running
-curl http://localhost:3000/health
-```
-
-You should see: `{"status":"healthy","timestamp":"..."}`
-
-## 3. Install MCP Client on Host (1 minute)
-
-```bash
-cd /Users/andrew/Documents/git_repos/claude-ting/dev-sessions-mcp
-
-npm install
-npm run build
-npm link
-```
-
-Verify: `which dev-sessions-mcp` should show `/usr/local/bin/dev-sessions-mcp`
-
-## 4. Rebuild Claude Docker Image (2 minutes)
+## 1. Bootstrap Everything (≈3 minutes)
 
 ```bash
 cd /Users/andrew/Documents/git_repos/claude-ting
-
-docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
+./dev-sessions/scripts/bootstrap-dev-sessions.sh
 ```
 
-## 5. Reload Shell
+What this does:
+- Enables SSH + provisions the `~/.ssh/claude_gateway` key (macOS)
+- Creates `dev-sessions/gateway/.env` with your paths
+- Builds & launches the gateway via Docker Compose
+- Builds + globally links the MCP client (`dev-sessions-mcp`)
+- Ensures `~/.claude/config.json` references the dev-sessions MCP
+
+Flags:
+- `--skip-ssh-setup` (if you've already run it once)
+- `--skip-gateway` or `--skip-mcp` to run individual pieces
+
+Re-run the script any time; it is idempotent.
+
+## 2. Smoke Test
 
 ```bash
-source ~/.zshrc
-```
-
-## 6. Test It!
-
-```bash
-# Start Claude in this repo
+# Start Claude in this repo (or any workspace)
 clauded .
 ```
 
-Inside Claude, try:
+Inside Claude, ask:
 
 ```
-Hey Claude! Can you use the create_dev_session tool to create a new dev session?
+Please use the create_dev_session tool to start a new session.
 ```
 
-Claude should:
-1. Call the `create_dev_session` tool
-2. Return a session ID like "riven-jg"
-3. Tell you how to attach: `tmux attach -t dev-riven-jg`
+You should see a response similar to:
+```
+✓ Created dev session: riven-jg
+Workspace: /Users/andrew/Documents/git_repos/claude-ting
+```
 
-Then try attaching in a new terminal:
+Attach from another terminal:
 
 ```bash
 tmux attach -t dev-riven-jg
 ```
 
-You should see a new Claude instance running!
+You now have a second Claude running with the delegated context.
 
 ## Common Commands
 
-**Start gateway:**
 ```bash
-docker start dev-sessions-gateway
-```
+# Check gateway status/logs
+cd dev-sessions/gateway
+docker compose ps
+docker compose logs -f
 
-**Stop gateway:**
-```bash
+# Restart gateway
+docker compose restart
+
+# Stop / start later
+docker compose stop
+docker compose start
+
+# Legacy docker commands still work because the container is named dev-sessions-gateway
+docker logs -f dev-sessions-gateway
+docker start dev-sessions-gateway
 docker stop dev-sessions-gateway
 ```
 
-**View gateway logs:**
 ```bash
-docker logs -f dev-sessions-gateway
-```
-
-**List tmux sessions:**
-```bash
+# List dev sessions on the host
 tmux ls
-```
 
-**Kill a tmux session:**
-```bash
+# Kill a particular session
 tmux kill-session -t dev-riven-jg
 ```
 
+## Manual Steps (If You Prefer)
+
+1. `./dev-sessions/scripts/setup-gateway-ssh.sh`
+2. `cp dev-sessions/gateway/.env.example dev-sessions/gateway/.env` (edit values)
+3. `cd dev-sessions/gateway && docker compose up -d --build`
+4. `cd dev-sessions/mcp && npm install && npm run build && npm link`
+5. `docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .`
+
 ## Troubleshooting
 
-**Gateway health check fails:**
 ```bash
-docker logs dev-sessions-gateway
-# Look for errors
-```
+# Gateway isn’t healthy
+cd dev-sessions/gateway
+docker compose logs -f
 
-**SSH issues:**
-```bash
+# SSH fails
 ssh -i ~/.ssh/claude_gateway localhost "echo test"
-# Should print "test"
-```
 
-**MCP not found in Docker:**
-```bash
+# Re-run the helper
+./dev-sessions/scripts/setup-gateway-ssh.sh
+
+# MCP binary missing inside Docker
 docker run -it --rm ubuntu-dev which dev-sessions-mcp
-# Should show path
 ```
 
-## What's Next?
+## Want More Detail?
 
-See [DEV_SESSIONS_README.md](./DEV_SESSIONS_README.md) for:
-- Detailed usage examples
-- All available MCP tools
-- Architecture explanation
-- Advanced troubleshooting
-
-## Quick Example: Handoff Workflow
-
-1. **In Claude 1:**
-   ```
-   User: "I need to hand off implementing the API tests to another Claude"
-
-   Claude: [Creates session "yasuo-mid"]
-   Claude: [Sends context message about what needs testing]
-   ```
-
-2. **In your terminal:**
-   ```bash
-   tmux attach -t dev-yasuo-mid
-   ```
-
-3. **You see Claude 2 with the context loaded!**
-
-That's it! You're ready to delegate tasks between Claude instances.
+See [`dev-sessions/README.md`](./dev-sessions/README.md) for:
+- Architecture diagrams
+- Tool behavior and safety constraints
+- Troubleshooting playbooks
+- Future roadmap ideas

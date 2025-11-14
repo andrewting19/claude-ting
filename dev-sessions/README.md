@@ -59,94 +59,94 @@ Claude Code Instance 2 (new Docker container in tmux)
 - Node.js 20+ installed on host (for MCP testing)
 - tmux installed on host
 
-### Step 1: Run SSH Setup
+### Option A: Bootstrap Script (Recommended)
 
-This enables SSH server on your Mac and creates SSH keys for the gateway:
+Run everything with one command:
 
 ```bash
-cd setup-scripts
+./dev-sessions/scripts/bootstrap-dev-sessions.sh
+```
+
+The bootstrap script:
+- Runs the macOS SSH helper (enables Remote Login, provisions keys, updates `~/.zshenv`)
+- Creates `dev-sessions/gateway/.env` with sensible defaults
+- Builds and starts the gateway via Docker Compose
+- Builds + links the MCP client (`dev-sessions-mcp`)
+- Ensures `~/.claude/config.json` contains the dev-sessions MCP entry
+
+Flags:
+- `--skip-ssh-setup` if you've already enabled SSH/key auth
+- `--skip-gateway` or `--skip-mcp` to control which pieces run
+
+### Option B: Manual Steps
+
+#### 1. Run the SSH Setup Helper (macOS)
+
+```bash
+cd dev-sessions/scripts
 ./setup-gateway-ssh.sh
 ```
 
 This script:
-- Enables Remote Login (SSH server) on macOS
-- Generates SSH keys (`~/.ssh/claude_gateway`)
-- Adds the key to `~/.ssh/authorized_keys`
-- Configures `~/.zshenv` with Homebrew paths (required for SSH non-interactive sessions)
-- Tests the SSH connection
+- Enables Remote Login (SSH server)
+- Generates `~/.ssh/claude_gateway` keys and authorizes them
+- Ensures non-interactive shells load Homebrew paths via `~/.zshenv`
+- Verifies that passwordless SSH works
 
-**Why .zshenv?**
-- SSH non-interactive sessions don't load `~/.zshrc`
-- tmux needs access to commands like `clauded` which may be in Homebrew paths
-- `.zshenv` is loaded for all shell sessions (interactive and non-interactive)
-
-### Step 2: Build the Gateway Server
+#### 2. Configure Gateway Environment
 
 ```bash
-cd gateway-server
-docker build -t dev-sessions-gateway .
+cp dev-sessions/gateway/.env.example dev-sessions/gateway/.env
+open dev-sessions/gateway/.env   # edit values if needed
 ```
 
-### Step 3: Start the Gateway Server
+Update the `.env` file with **absolute** host paths. Key variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `SSH_USER` | macOS username the gateway should SSH as |
+| `SSH_HOST` | Hostname the container should target (defaults to `host.docker.internal`) |
+| `SSH_PORT` | SSH port (default `22`) |
+| `DEV_SESSIONS_GATEWAY_PORT` | Host port for the HTTP API (default `6767`) |
+| `CLAUDE_GATEWAY_SSH_KEY_PATH` | Path to the SSH private key mounted into the container |
+| `DEV_SESSIONS_DB_PATH` | Location for the SQLite database on the host |
+| `MAX_SESSIONS_PER_CREATOR` | Rate limit per creator ID |
+
+#### 3. Build & Start the Gateway
 
 ```bash
-docker run -d \
-  --name dev-sessions-gateway \
-  -p 6767:6767 \
-  -v ~/.ssh/claude_gateway:/root/.ssh/id_ed25519:ro \
-  -v ~/dev-sessions-gateway.db:/data/sessions.db \
-  -e SSH_USER=$USER \
-  -e MAX_SESSIONS_PER_CREATOR=10 \
-  dev-sessions-gateway
+cd dev-sessions/gateway
+docker compose up -d --build
 ```
 
-**Environment Variables:**
-- `SSH_USER`: Your username on the host machine (required)
-- `MAX_SESSIONS_PER_CREATOR`: Maximum concurrent sessions per creator (default: 10)
-- `PORT`: Gateway server port (default: 6767)
-
-Check that it's running:
+Verify health:
 
 ```bash
 curl http://localhost:6767/health
-# Should return: {"status":"healthy","timestamp":"..."}
+# -> {"status":"healthy","timestamp":"..."}
 ```
 
-### Step 4: Install MCP Client (Host)
-
-For testing and host usage:
+#### 4. Install the MCP Client on the Host
 
 ```bash
-cd dev-sessions-mcp
+cd dev-sessions/mcp
 npm install
 npm run build
 npm link
+which dev-sessions-mcp   # should print the global path
 ```
 
-Verify installation:
-
-```bash
-which dev-sessions-mcp
-# Should show: /usr/local/bin/dev-sessions-mcp
-```
-
-### Step 5: Build Claude Docker Image
-
-Rebuild the ubuntu-dev image with MCP client installed:
+#### 5. Rebuild the Claude Docker Image
 
 ```bash
 docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
 ```
 
-### Step 6: Configure Claude Code MCP
+This ensures the MCP client and entrypoint automation are baked into the container image.
 
-Add the dev-sessions MCP to your Claude Code configuration.
+#### 6. Configure Claude Code MCP (Host Optional)
 
-**For Docker Claude** (already configured via Dockerfile):
-The MCP is automatically available in the Docker container.
-
-**For Host Claude** (optional):
-Edit `~/.claude/config.json` and add:
+If you run Claude directly on the host, ensure `~/.claude/config.json` contains:
 
 ```json
 {
@@ -161,7 +161,9 @@ Edit `~/.claude/config.json` and add:
 }
 ```
 
-### Step 7: Reload Shell Config
+The bootstrap script adds this automatically. Docker-based `clauded` sessions receive the MCP config via the container entrypoint.
+
+Finally, reload your shell configuration if you updated `~/.zshrc` with the `clauded` helper:
 
 ```bash
 source ~/.zshrc
@@ -352,7 +354,7 @@ This makes sessions memorable and fun to reference!
 **Champion Pool:** 145+ champions including:
 - `ahri`, `akali`, `alistar`, `amumu`, `anivia`, `annie`, `ashe`, `azir`
 - `bard`, `blitz`, `brand`, `braum`, `cait`, `camille`, etc.
-- Full list in `gateway-server/src/champion-ids.ts`
+- Full list in `dev-sessions/gateway/src/champion-ids.ts`
 
 **ID Generation:**
 - Gateway generates random champion-role combinations
@@ -393,7 +395,7 @@ ssh -i ~/.ssh/claude_gateway localhost "echo test"
 sudo systemsetup -getremotelogin
 
 # Re-run setup if needed
-./setup-scripts/setup-gateway-ssh.sh
+./dev-sessions/scripts/setup-gateway-ssh.sh
 ```
 
 ### MCP not available in Claude

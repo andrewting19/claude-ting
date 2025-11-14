@@ -11,11 +11,12 @@ export class TmuxExecutor {
   private sshOptions: string[];
 
   constructor(
-    sshTarget: string = 'localhost',
-    sshUser?: string
+    sshHost: string = 'localhost',
+    sshUser?: string,
+    sshPort: number = 22
   ) {
     // If user specified, use user@host format
-    this.sshTarget = sshUser ? `${sshUser}@${sshTarget}` : sshTarget;
+    this.sshTarget = sshUser ? `${sshUser}@${sshHost}` : sshHost;
 
     // SSH options for non-interactive execution
     this.sshOptions = [
@@ -23,6 +24,10 @@ export class TmuxExecutor {
       '-o', 'BatchMode=yes',
       '-o', 'ConnectTimeout=5'
     ];
+
+    if (sshPort !== 22) {
+      this.sshOptions.push('-p', sshPort.toString());
+    }
   }
 
   /**
