@@ -34,7 +34,13 @@ export class TmuxExecutor {
    * Executes a command on the host via SSH
    */
   private async execSSH(command: string): Promise<string> {
-    const sshCmd = `ssh ${this.sshOptions.join(' ')} ${this.sshTarget} "${command.replace(/"/g, '\\"')}"`;
+    const escapedCommand = command
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/`/g, '\\`');
+
+    const sshCmd = `ssh ${this.sshOptions.join(' ')} ${this.sshTarget} "${escapedCommand}"`;
 
     try {
       const { stdout } = await execAsync(sshCmd, {
@@ -91,14 +97,19 @@ export class TmuxExecutor {
       throw new Error('Claude is not running in this session - refusing to send message');
     }
 
-    // Send the message literally
-    // Escape single quotes in the message
-    const escapedMessage = message.replace(/'/g, "'\\''");
-    await this.execSSH(`tmux send-keys -l -t ${tmuxSessionName} '${escapedMessage}'`);
+    // Send the message literally through base64 + here-doc so no shell interprets it
+    const encodedMessage = Buffer.from(message, 'utf8').toString('base64');
+    const escapedSessionName = tmuxSessionName.replace(/'/g, "'\\''");
+    const remoteScript = [
+      `decoded=$(printf '%s' '${encodedMessage}' | base64 --decode)`,
+      `tmux send-keys -l -t '${escapedSessionName}' "$decoded"`
+    ].join('\n');
+
+    await this.execSSH(`bash -s <<'EOF'\n${remoteScript}\nEOF\n`);
 
     // Send two Enters: first creates newline, second submits
-    await this.execSSH(`tmux send-keys -t ${tmuxSessionName} C-m`);
-    await this.execSSH(`tmux send-keys -t ${tmuxSessionName} C-m`);
+    await this.execSSH(`tmux send-keys -t '${escapedSessionName}' C-m`);
+    await this.execSSH(`tmux send-keys -t '${escapedSessionName}' C-m`);
   }
 
   /**

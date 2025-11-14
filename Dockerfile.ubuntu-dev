@@ -65,12 +65,14 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     npm install -g yarn && \
     npm install -g tsx && \
     npm install -g @anthropic-ai/claude-code && \
+    npm install -g @openai/codex && \
     ln -s \$(which node) /usr/local/bin/node && \
     ln -s \$(which npm) /usr/local/bin/npm && \
     ln -s \$(which npx) /usr/local/bin/npx && \
     ln -s \$(which yarn) /usr/local/bin/yarn && \
     ln -s \$(which tsx) /usr/local/bin/tsx && \
-    ln -s \$(which claude) /usr/local/bin/claude"
+    ln -s \$(which claude) /usr/local/bin/claude && \
+    ln -s \$(which codex) /usr/local/bin/codex"
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash
@@ -95,7 +97,8 @@ RUN mkdir -p /workspace
 
 # Set up basic environment
 RUN mkdir -p /root/.local/share/nvim && \
-    mkdir -p /root/.claude
+    mkdir -p /root/.claude && \
+    mkdir -p /root/.codex
 
 # Set sandbox environment variable
 ENV IS_SANDBOX=1
@@ -189,6 +192,35 @@ else
       mv /root/.claude/config.json.tmp /root/.claude/config.json
   else
     echo "✓ MCP configuration already present"
+  fi
+fi
+
+# Ensure Codex MCP configuration exists
+mkdir -p /root/.codex
+CODEX_CONFIG="/root/.codex/config.toml"
+
+if [ ! -f "$CODEX_CONFIG" ]; then
+  cat > "$CODEX_CONFIG" << EOF
+[mcp_servers."dev-sessions"]
+command = "dev-sessions-mcp"
+
+[mcp_servers."dev-sessions".env]
+GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
+EOF
+  echo "✓ Created Codex config with dev-sessions MCP entry"
+else
+  if ! grep -q '\[mcp_servers\."dev-sessions"\]' "$CODEX_CONFIG"; then
+    cat >> "$CODEX_CONFIG" << EOF
+
+[mcp_servers."dev-sessions"]
+command = "dev-sessions-mcp"
+
+[mcp_servers."dev-sessions".env]
+GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
+EOF
+    echo "✓ Added dev-sessions MCP entry to Codex config"
+  else
+    echo "✓ Codex config already contains dev-sessions MCP entry"
   fi
 fi
 

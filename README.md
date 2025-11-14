@@ -1,8 +1,8 @@
 # Claude Docker Setup
 
-> Run Claude Code CLI with **no permission prompts** in a secure Docker container — get 10x faster operations while keeping your Mac safe.
+> Run Claude Code **and** OpenAI Codex CLIs with **no permission prompts** in a secure Docker container — get 10x faster operations while keeping your Mac safe.
 
-This repository provides a Docker-based setup for running Claude Code CLI in a containerized Ubuntu environment, enabling the `--dangerously-skip-permissions` flag for dramatically faster, more flexible operation.
+This repository provides a Docker-based setup for running Claude Code CLI (and now Codex CLI) in a containerized Ubuntu environment, enabling the `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` flags for dramatically faster, more flexible operation.
 
 ## ✨ Benefits
 
@@ -38,13 +38,27 @@ clauded . "-p 3000:3000"
 
 That's it! Claude Code runs instantly without any permission dialogs.
 
+```bash
+# Run Codex in the current directory
+codexed
+
+# Trust a repo once, then run hands-free
+codexed /path/to/my-project
+
+# Same port-mapping / env passthrough support
+codexed . "-p 3000:3000 -e NODE_ENV=development"
+```
+
+Codex launches with `--dangerously-bypass-approvals-and-sandbox` inside the same container, so you get the same "no prompt" workflow backed by Docker isolation.
+
 ## 🚀 Quickstart
 
 ### Prerequisites
 
 - **macOS** (Intel or Apple Silicon)
 - **Docker Desktop** installed and running
-- **Claude account** for authentication
+- **Claude account** for Claude CLI authentication
+- **ChatGPT plan with Codex access** (Plus, Pro, Business, Edu, Enterprise) for the Codex CLI
 
 ### Installation (2 minutes)
 
@@ -55,10 +69,10 @@ That's it! Claude Code runs instantly without any permission dialogs.
    docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
    ```
 
-2. **Add function to your shell** (`~/.zshrc`):
+2. **Add functions to your shell** (`~/.zshrc`):
    ```bash
-   # Copy the claude-docker function from setup-claude-docker.sh
-   # or add it manually (see CLAUDE.md for the function code)
+   # Copy the claude-docker and codex-docker helpers from setup-claude-docker.sh
+   # (or add them manually from the README)
    ```
 
 3. **First-time authentication**:
@@ -69,7 +83,13 @@ That's it! Claude Code runs instantly without any permission dialogs.
    # Follow the browser OAuth flow
    ```
 
-You're ready to go! Try `clauded` in any project directory.
+   ```bash
+   codexed
+   # Inside container, run Codex login when prompted
+   codex login
+   ```
+
+You're ready to go! Try `clauded` or `codexed` in any project directory.
 
 ## How It Works
 
@@ -93,20 +113,22 @@ Docker Container (ubuntu-dev)
    - Programming languages (Python 3.12, Node.js 22, Bun)
    - Utilities (ripgrep, fd-find, bat, jq, htop)
    - Claude Code CLI (`@anthropic-ai/claude-code`)
+   - Codex CLI (`@openai/codex`)
    - Entrypoint script for OAuth credential merging
 
-2. **Shell Function (`claude-docker`)**: A Zsh function that:
+2. **Shell Functions (`claude-docker`, `codex-docker`)**: Zsh helpers that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
-   - Mounts OAuth credentials from host for automatic authentication
+   - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
    - Sets `DEV_SESSIONS_GATEWAY_URL` so MCP traffic hits the host gateway when running inside Docker
-   - Passes through to Claude with `--dangerously-skip-permissions` flag
+   - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
 
 3. **Volume Mounts**:
    - Project directory → `/workspace` (working directory)
    - Neovim config → `/root/.local/share/nvim` (shared editor data)
    - Claude config → `~/.claude` directory (OAuth persistence)
    - Host OAuth credentials → `/root/.claude.host.json` (read-only merge source)
+   - Codex config → `~/.codex` directory (contains `auth.json`, `config.toml`, prompts, etc.)
 
 ## 📦 Installation Details
 
@@ -117,7 +139,7 @@ Docker Container (ubuntu-dev)
 | **OS** | macOS (Intel or Apple Silicon) |
 | **Docker** | Docker Desktop for Mac |
 | **Shell** | Zsh (default on macOS) |
-| **Authentication** | Claude account (OAuth) or API key (optional) |
+| **Authentication** | Claude account (OAuth) or API key (optional), **and** a ChatGPT plan with Codex access for Codex CLI |
 
 ## 💻 Usage Guide
 
@@ -133,6 +155,8 @@ clauded /path/to/project
 # Use relative paths
 clauded ../other-project
 ```
+
+Swap `clauded` for `codexed` in the commands above to launch the Codex CLI with the exact same container mounts and environment.
 
 ### Web Development
 
@@ -150,6 +174,15 @@ clauded . "-p 8080:8080 -e NODE_ENV=development"
 ```
 
 **Port mapping format**: `-p HOST:CONTAINER` (e.g., `-p 3000:3000` makes `localhost:3000` work)
+
+All of these flags work identically with `codexed` if you prefer the Codex workflow.
+
+### Codex CLI workflow
+
+- `codexed` launches `codex --dangerously-bypass-approvals-and-sandbox` (alias `--yolo`) so the CLI never asks for approvals. We rely on Docker for isolation, as recommended in the [Codex security guide](https://developers.openai.com/codex/security/).
+- Codex stores credentials and config in `~/.codex`. The helper mounts your host directory at `/root/.codex`, so authenticate once via `codex login` (either locally or inside the container) and the resulting `auth.json` is reused for every run.
+- The container entrypoint ensures `~/.codex/config.toml` contains a `dev-sessions` MCP launcher that points to the local gateway. Remove that block if you do not want Codex to see the MCP server.
+- Set `CODEX_HOME` on the host if you keep credentials elsewhere. The helper passes `CODEX_HOME=/root/.codex` inside the container so Codex always finds the mounted directory.
 
 ## 📁 Project Structure
 
@@ -174,6 +207,7 @@ claude-ting/
 | `-v ~/.claude.json:/root/.claude.host.json:ro` | OAuth credential source (read-only) |
 | `-v ~/.claude:/root/.claude` | Claude configuration (persistent) |
 | `--dangerously-skip-permissions` | **The magic flag** — no prompts! |
+| `--dangerously-bypass-approvals-and-sandbox` | Codex equivalent of the magic flag (only used by `codexed`) |
 
 ### IS_SANDBOX Environment Variable
 
@@ -181,18 +215,27 @@ The `IS_SANDBOX=1` environment variable is set in the Docker image to ensure Cla
 
 ### Authentication System
 
-Two authentication methods are supported:
+Two authentication methods are supported for Claude, and Codex has a very similar flow:
 
-**OAuth (Recommended)**
-1. **First time**: Run `/login` inside container, authenticate via browser
-2. **OAuth tokens**: Saved to `~/.claude.json` on host
-3. **Subsequent runs**: Entrypoint script merges OAuth credentials into container
+**Claude OAuth (Recommended)**
+1. **First time**: Run `/login` inside `clauded`, authenticate via browser
+2. **Tokens**: Saved to `~/.claude.json` on host
+3. **Subsequent runs**: Entrypoint merges OAuth details into `/root/.claude.json`
 4. **Result**: Seamless authentication across all containers
 
-**API Key (Optional)**
+**Claude API Key (Optional)**
 - Set `ANTHROPIC_API_KEY` environment variable on host
 - Automatically passed through to container if present
 - Useful for CI/CD or automated workflows
+
+**Codex ChatGPT Login (Recommended)**
+1. Run `codexed` and follow the CLI login prompt (`codex login`)
+2. Credentials are stored in `~/.codex/auth.json` (or whatever `CODEX_HOME` points to)
+3. Because that directory is mounted read/write, future `codexed` sessions automatically reuse the login
+
+**Codex API key (Optional)**
+- Follow the official guidance: `printenv OPENAI_API_KEY | codex login --with-api-key`
+- The helper passes `OPENAI_API_KEY` into the container so you can forward the secret via STDIN even when running in Docker
 
 ## 🐛 Troubleshooting
 
@@ -201,7 +244,7 @@ Two authentication methods are supported:
 | Problem | Solution |
 |---------|----------|
 | **"docker: command not found"** | Install Docker Desktop and ensure it's running |
-| **Authentication failed** | Run `clauded` then `/login` inside container |
+| **Authentication failed** | `clauded` → `/login`, `codexed` → `codex login` (or copy `~/.codex/auth.json`) |
 | **Can't access files** | Check Docker Desktop file sharing permissions |
 | **Port already in use** | Change the host port: `-p 3001:3000` |
 
@@ -211,6 +254,9 @@ Two authentication methods are supported:
 # Check if OAuth credentials exist
 ls -la ~/.claude.json
 
+# Check if Codex auth exists
+ls -la ~/.codex/auth.json
+
 # Verify Claude auth status
 clauded
 # Inside container:
@@ -218,6 +264,9 @@ claude auth status
 
 # Test container directly
 docker run --rm ubuntu-dev claude --version
+
+# Test Codex CLI
+docker run --rm ubuntu-dev codex --version
 ```
 
 ## 🔄 Updating
@@ -244,6 +293,7 @@ docker run --rm ubuntu-dev claude --version
 - **Project dependencies**: Install in your project, not the Docker image
 - **Performance**: First build takes ~5 minutes; subsequent runs are instant
 - **Security**: Container isolation protects your Mac from unintended changes
+- **Codex MCP config**: The entrypoint auto-inserts the `dev-sessions` MCP block into `~/.codex/config.toml`. Delete or edit that block if you prefer a different configuration.
 
 ## 🤝 Contributing
 

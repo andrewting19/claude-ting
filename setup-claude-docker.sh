@@ -60,6 +60,43 @@ claude-docker() {
 # Alias for easier access
 alias clauded='claude-docker'
 
+codex-docker() {
+    local path="${1:-.}"
+    local extra_args="${2}"
+
+    # Convert relative path to absolute
+    if [[ "$path" != /* ]]; then
+        path="$(pwd)/$path"
+    fi
+
+    # Create ~/.codex directory if it doesn't exist
+    /bin/mkdir -p "$HOME/.codex"
+
+    local docker_cmd="/usr/local/bin/docker run -it --rm"
+
+    # Pass through API key if set (optional; CLI prefers OAuth)
+    if [ -n "$OPENAI_API_KEY" ]; then
+        docker_cmd="$docker_cmd -e OPENAI_API_KEY=\"$OPENAI_API_KEY\""
+    fi
+
+    docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
+    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
+    docker_cmd="$docker_cmd -v \"$path:/workspace\""
+    docker_cmd="$docker_cmd -w /workspace"
+    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
+    docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
+
+    if [ -n "$extra_args" ]; then
+        docker_cmd="$docker_cmd $extra_args"
+    fi
+
+    docker_cmd="$docker_cmd ubuntu-dev codex --dangerously-bypass-approvals-and-sandbox"
+
+    eval $docker_cmd
+}
+
+alias codexed='codex-docker'
+
 EOF
 
 echo ""
@@ -72,3 +109,12 @@ echo "Usage:"
 echo "  clauded                    # Current directory"
 echo "  clauded /path/to/project   # Specific path"
 echo "  clauded . \"-p 3000:3000\"   # With port mapping"
+echo ""
+echo "Codex:"
+echo "  codexed"
+echo "  # First run prompts for login (or run 'codex login' inside)"
+echo ""
+echo "Usage:"
+echo "  codexed                    # Current directory"
+echo "  codexed /path/to/project   # Specific path"
+echo "  codexed . \"-p 3000:3000\"   # With port mapping"
