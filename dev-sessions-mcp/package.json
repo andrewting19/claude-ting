@@ -1,0 +1,25 @@
+{
+  "name": "dev-sessions-mcp",
+  "version": "1.0.0",
+  "description": "MCP client for managing Claude developer sessions",
+  "main": "dist/index.js",
+  "bin": {
+    "dev-sessions-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["claude", "mcp", "dev-sessions", "tmux"],
+  "author": "Andrew Ting",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
+  }
+}

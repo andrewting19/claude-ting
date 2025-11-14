@@ -76,6 +76,15 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
+# Install dev-sessions-mcp
+COPY dev-sessions-mcp /opt/dev-sessions-mcp
+RUN bash -c "source $NVM_DIR/nvm.sh && \
+    cd /opt/dev-sessions-mcp && \
+    npm install && \
+    npm run build && \
+    npm install -g . && \
+    ln -s \$(which dev-sessions-mcp) /usr/local/bin/dev-sessions-mcp"
+
 # Configure git globally to handle ownership issues and set default credentials
 RUN git config --system --add safe.directory '*' && \
     git config --system user.email "andrewtingnyc@gmail.com" && \
@@ -102,14 +111,19 @@ RUN echo '# Pyenv initialization' >> /etc/bash.bashrc && \
     echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /etc/bash.bashrc && \
     echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> /etc/bash.bashrc
 
-# Create entrypoint script to merge OAuth credentials from host
+# Create entrypoint script to merge OAuth credentials and MCP config
 RUN cat > /entrypoint.sh << 'EOF'
 #!/bin/bash
+
+# Ensure the dev-sessions gateway hostname resolves from Docker
+if [ -z "$DEV_SESSIONS_GATEWAY_URL" ]; then
+  export DEV_SESSIONS_GATEWAY_URL="http://host.docker.internal:6767"
+fi
 
 # Merge Claude OAuth config from host file if available
 if [ -f "/root/.claude.host.json" ]; then
   # Extract OAuth and user data from host config
-  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache"
+  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache mcpServers"
 
   # Build jq expression for extraction
   JQ_EXPR=""
@@ -131,6 +145,50 @@ if [ -f "/root/.claude.host.json" ]; then
       echo "$HOST_CONFIG" | jq . > /root/.claude.json
       echo "✓ OAuth credentials imported from host"
     fi
+  fi
+fi
+
+# Ensure dev-sessions MCP is configured in ~/.claude.json
+if [ -f "/root/.claude.json" ]; then
+  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" \
+     '.mcpServers = (.mcpServers // {}) |
+      .mcpServers["dev-sessions"] = {
+        "type": "stdio",
+        "command": "dev-sessions-mcp",
+        "args": [],
+        "env": {
+          "GATEWAY_URL": $gateway
+        }
+      }' \
+     /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+  echo "✓ Ensured dev-sessions MCP entry in ~/.claude.json"
+fi
+
+# Ensure MCP configuration exists (gets overwritten by mount)
+if [ ! -f "/root/.claude/config.json" ]; then
+  echo "✓ Creating MCP configuration"
+  cat > /root/.claude/config.json << 'MCPEOF'
+{
+  "mcpServers": {
+    "dev-sessions": {
+      "command": "dev-sessions-mcp",
+      "env": {
+        "GATEWAY_URL": "http://host.docker.internal:6767"
+      }
+    }
+  }
+}
+MCPEOF
+else
+  # MCP config exists, ensure dev-sessions is configured
+  if ! grep -q "dev-sessions" /root/.claude/config.json 2>/dev/null; then
+    echo "✓ Adding dev-sessions MCP to existing config"
+    # Merge dev-sessions into existing mcpServers
+    jq '.mcpServers["dev-sessions"] = {"command": "dev-sessions-mcp", "env": {"GATEWAY_URL": "http://host.docker.internal:6767"}}' \
+      /root/.claude/config.json > /root/.claude/config.json.tmp && \
+      mv /root/.claude/config.json.tmp /root/.claude/config.json
+  else
+    echo "✓ MCP configuration already present"
   fi
 fi
 

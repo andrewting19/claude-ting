@@ -99,6 +99,7 @@ Docker Container (ubuntu-dev)
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
    - Mounts OAuth credentials from host for automatic authentication
+   - Sets `DEV_SESSIONS_GATEWAY_URL` so MCP traffic hits the host gateway when running inside Docker
    - Passes through to Claude with `--dangerously-skip-permissions` flag
 
 3. **Volume Mounts**:

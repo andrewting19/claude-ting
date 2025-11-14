@@ -33,6 +33,9 @@ claude-docker() {
         docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
     fi
 
+    # Pass host workspace path for dev-sessions MCP
+    docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
+
     docker_cmd="$docker_cmd -v \"$path:/workspace\""
     docker_cmd="$docker_cmd -w /workspace"
     docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dev-sessions": {
+      "command": "dev-sessions-mcp",
+      "env": {
+        "GATEWAY_URL": "http://host.docker.internal:6767"
+      }
+    }
+  }
+}
