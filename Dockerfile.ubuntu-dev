@@ -200,24 +200,31 @@ mkdir -p /root/.codex
 CODEX_CONFIG="/root/.codex/config.toml"
 
 if [ ! -f "$CODEX_CONFIG" ]; then
-  cat > "$CODEX_CONFIG" << EOF
+  cat > "$CODEX_CONFIG" << CODEXEOF
+tool_output_token_limit = 25000
+
+[features]
+web_search_request = true
+view_image_tool = true
+
 [mcp_servers."dev-sessions"]
 command = "dev-sessions-mcp"
 
 [mcp_servers."dev-sessions".env]
 GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
-EOF
+CODEXEOF
   echo "✓ Created Codex config with dev-sessions MCP entry"
 else
+  # Config exists - only ensure dev-sessions MCP is present
   if ! grep -q '\[mcp_servers\."dev-sessions"\]' "$CODEX_CONFIG"; then
-    cat >> "$CODEX_CONFIG" << EOF
+    cat >> "$CODEX_CONFIG" << CODEXEOF2
 
 [mcp_servers."dev-sessions"]
 command = "dev-sessions-mcp"
 
 [mcp_servers."dev-sessions".env]
 GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
-EOF
+CODEXEOF2
     echo "✓ Added dev-sessions MCP entry to Codex config"
   else
     echo "✓ Codex config already contains dev-sessions MCP entry"

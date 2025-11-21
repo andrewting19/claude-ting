@@ -61,23 +61,31 @@ claude-docker() {
 alias clauded='claude-docker'
 
 codex-docker() {
-    local path="${1:-.}"
-    local extra_args="${2}"
+    local path="$(pwd)"
+    local docker_extra_args=""
+    local codex_args=""
 
-    # Convert relative path to absolute
-    if [[ "$path" != /* ]]; then
-        path="$(pwd)/$path"
-    fi
+    # Check if first arg is a codex subcommand
+    case "$1" in
+        resume|exec|e|login|logout|mcp|mcp-server|app-server|completion|sandbox|debug|apply|a|cloud|features|help)
+            # Pass all args to codex
+            codex_args="$@"
+            ;;
+        *)
+            # First arg is a path (or default to current dir)
+            path="${1:-.}"
+            if [[ "$path" != /* ]]; then
+                path="$(pwd)/$path"
+            fi
+            # Second arg is docker extra args
+            docker_extra_args="${2}"
+            ;;
+    esac
 
     # Create ~/.codex directory if it doesn't exist
     /bin/mkdir -p "$HOME/.codex"
 
     local docker_cmd="/usr/local/bin/docker run -it --rm"
-
-    # Pass through API key if set (optional; CLI prefers OAuth)
-    if [ -n "$OPENAI_API_KEY" ]; then
-        docker_cmd="$docker_cmd -e OPENAI_API_KEY=\"$OPENAI_API_KEY\""
-    fi
 
     docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
     docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
@@ -86,11 +94,15 @@ codex-docker() {
     docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
     docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
 
-    if [ -n "$extra_args" ]; then
-        docker_cmd="$docker_cmd $extra_args"
+    if [ -n "$docker_extra_args" ]; then
+        docker_cmd="$docker_cmd $docker_extra_args"
     fi
 
     docker_cmd="$docker_cmd ubuntu-dev codex --dangerously-bypass-approvals-and-sandbox"
+
+    if [ -n "$codex_args" ]; then
+        docker_cmd="$docker_cmd $codex_args"
+    fi
 
     eval $docker_cmd
 }
