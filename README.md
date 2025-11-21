@@ -71,7 +71,7 @@ Codex launches with `--dangerously-bypass-approvals-and-sandbox` inside the same
 
 2. **Add functions to your shell** (`~/.zshrc`):
    ```bash
-   # Copy the claude-docker and codex-docker helpers from setup-claude-docker.sh
+   # Copy the claude-docker and codex-docker helpers from setup-claude-codex.sh
    # (or add them manually from the README)
    ```
 
@@ -114,13 +114,13 @@ Docker Container (ubuntu-dev)
    - Utilities (ripgrep, fd-find, bat, jq, htop)
    - Claude Code CLI (`@anthropic-ai/claude-code`)
    - Codex CLI (`@openai/codex`)
-   - Entrypoint script for OAuth credential merging
+   - Entrypoint script for OAuth credential merging and default MCP config generation (creates `dev-sessions` block if missing; prefers runtime env `DEV_SESSIONS_GATEWAY_URL`, default `http://host.docker.internal:6767`)
 
 2. **Shell Functions (`claude-docker`, `codex-docker`)**: Zsh helpers that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
    - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
-   - Sets `DEV_SESSIONS_GATEWAY_URL` so MCP traffic hits the host gateway when running inside Docker
+   - Passes `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767`) so MCP traffic hits the host gateway when running inside Docker
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
 
 3. **Volume Mounts**:
@@ -181,7 +181,7 @@ All of these flags work identically with `codexed` if you prefer the Codex workf
 
 - `codexed` launches `codex --dangerously-bypass-approvals-and-sandbox` (alias `--yolo`) so the CLI never asks for approvals. We rely on Docker for isolation, as recommended in the [Codex security guide](https://developers.openai.com/codex/security/).
 - Codex stores credentials and config in `~/.codex`. The helper mounts your host directory at `/root/.codex`, so authenticate once via `codex login` (either locally or inside the container) and the resulting `auth.json` is reused for every run.
-- The container entrypoint ensures `~/.codex/config.toml` contains a `dev-sessions` MCP launcher that points to the local gateway. Remove that block if you do not want Codex to see the MCP server.
+- The container entrypoint creates `~/.codex/config.toml` with a `dev-sessions` MCP launcher only if it doesn't exist. Gateway is controlled at runtime via `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767`). Remove the block entirely if you do not want Codex to see the MCP server.
 - Set `CODEX_HOME` on the host if you keep credentials elsewhere. The helper passes `CODEX_HOME=/root/.codex` inside the container so Codex always finds the mounted directory.
 
 ## 📁 Project Structure
@@ -190,7 +190,7 @@ All of these flags work identically with `codexed` if you prefer the Codex workf
 claude-ting/
 ├── Dockerfile.ubuntu-dev     # Ubuntu 24.04 + dev tools + Claude Code
 ├── dev-sessions/             # Gateway, MCP client, and docs for dev handoff sessions
-├── setup-claude-docker.sh    # Shell function and auto-setup script
+├── setup-claude-codex.sh     # Shell function and auto-setup script
 ├── README.md                 # This documentation
 └── CLAUDE.md                 # Instructions for Claude Code itself
 ```
@@ -247,6 +247,7 @@ Two authentication methods are supported for Claude, and Codex has a very simila
 | **Authentication failed** | `clauded` → `/login`, `codexed` → `codex login` (or copy `~/.codex/auth.json`) |
 | **Can't access files** | Check Docker Desktop file sharing permissions |
 | **Port already in use** | Change the host port: `-p 3001:3000` |
+| **MCP / dev-sessions unreachable** | Ensure `DEV_SESSIONS_GATEWAY_URL` is set to `http://host.docker.internal:6767` (default), rebuild the image, and re-source the helper so `codexed`/`clauded` pass it through |
 
 ### Debug Commands
 
@@ -267,6 +268,9 @@ docker run --rm ubuntu-dev claude --version
 
 # Test Codex CLI
 docker run --rm ubuntu-dev codex --version
+
+# Verify MCP gateway DNS from inside the container (should resolve host.docker.internal)
+docker run --rm ubuntu-dev getent hosts host.docker.internal
 ```
 
 ## 🔄 Updating
@@ -284,7 +288,7 @@ docker run --rm ubuntu-dev codex --version
 1. Pull latest changes
 2. Source the setup script again:
    ```bash
-   source setup-claude-docker.sh
+   source setup-claude-codex.sh
    ```
 
 ## 📝 Important Notes

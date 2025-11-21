@@ -195,9 +195,23 @@ else
   fi
 fi
 
-# Ensure Codex MCP configuration exists
-mkdir -p /root/.codex
-CODEX_CONFIG="/root/.codex/config.toml"
+# Prepare Codex config in a shadow copy to avoid modifying host ~/.codex
+ORIG_CODEX_HOME="${CODEX_HOME:-/root/.codex}"
+SHADOW_CODEX_HOME="/tmp/codex-home"
+mkdir -p "$SHADOW_CODEX_HOME"
+# Copy existing files for baseline
+if [ -d "$ORIG_CODEX_HOME" ] && [ "$(ls -A "$ORIG_CODEX_HOME" 2>/dev/null)" ]; then
+  cp -a "$ORIG_CODEX_HOME"/. "$SHADOW_CODEX_HOME"/
+fi
+# Keep history and sessions persisted on host; symlink them into the shadow copy
+mkdir -p "$ORIG_CODEX_HOME"
+touch "$ORIG_CODEX_HOME/history.jsonl"
+mkdir -p "$ORIG_CODEX_HOME/sessions"
+ln -sf "$ORIG_CODEX_HOME/history.jsonl" "$SHADOW_CODEX_HOME/history.jsonl"
+ln -snf "$ORIG_CODEX_HOME/sessions" "$SHADOW_CODEX_HOME/sessions"
+
+export CODEX_HOME="$SHADOW_CODEX_HOME"
+CODEX_CONFIG="$CODEX_HOME/config.toml"
 
 if [ ! -f "$CODEX_CONFIG" ]; then
   cat > "$CODEX_CONFIG" << CODEXEOF
@@ -213,22 +227,37 @@ command = "dev-sessions-mcp"
 [mcp_servers."dev-sessions".env]
 GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
 CODEXEOF
-  echo "✓ Created Codex config with dev-sessions MCP entry"
+  echo "✓ Created Codex config with dev-sessions MCP entry (shadow copy)"
 else
-  # Config exists - only ensure dev-sessions MCP is present
-  if ! grep -q '\[mcp_servers\."dev-sessions"\]' "$CODEX_CONFIG"; then
-    cat >> "$CODEX_CONFIG" << CODEXEOF2
+  # Ensure dev-sessions gateway URL is correct inside the shadow copy
+  export DEV_GATEWAY="$DEV_SESSIONS_GATEWAY_URL"
+  python - <<'PY'
+import os, re, pathlib
 
-[mcp_servers."dev-sessions"]
-command = "dev-sessions-mcp"
+config_path = os.environ["CODEX_CONFIG"]
+gateway = os.environ["DEV_GATEWAY"]
 
-[mcp_servers."dev-sessions".env]
-GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
-CODEXEOF2
-    echo "✓ Added dev-sessions MCP entry to Codex config"
-  else
-    echo "✓ Codex config already contains dev-sessions MCP entry"
-  fi
+text = pathlib.Path(config_path).read_text(encoding="utf-8")
+
+if '[mcp_servers."dev-sessions"]' not in text:
+    text += f'\n[mcp_servers."dev-sessions"]\ncommand = "dev-sessions-mcp"\n'
+
+if '[mcp_servers."dev-sessions".env]' not in text:
+    text += f'\n[mcp_servers."dev-sessions".env]\nGATEWAY_URL = "{gateway}"\n'
+else:
+    pattern = r'(\[mcp_servers\."dev-sessions"\.env\][^\[]*)'
+    def repl(match):
+        block = match.group(1)
+        if "GATEWAY_URL" in block:
+            block = re.sub(r'GATEWAY_URL\s*=.*', f'GATEWAY_URL = "{gateway}"', block)
+        else:
+            block = block.rstrip() + f'\nGATEWAY_URL = "{gateway}"\n'
+        return block
+    text = re.sub(pattern, repl, text, count=1, flags=re.S)
+
+pathlib.Path(config_path).write_text(text, encoding="utf-8")
+PY
+  echo "✓ Updated dev-sessions gateway URL in Codex config shadow copy"
 fi
 
 # Execute the command

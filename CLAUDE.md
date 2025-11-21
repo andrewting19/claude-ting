@@ -1,95 +1,48 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for running this repository with Claude Code or Codex CLIs inside the provided Docker setup.
 
-## Project Overview
+## What This Repo Provides
+- Containerized workflow so both CLIs run with no approval prompts (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex), relying on Docker for isolation.
+- Ubuntu 24.04 image with pyenv Python 3.12, nvm Node 22, Bun, common dev tools (git, neovim, ripgrep, fd-find, bat, jq, htop), and global installs of `@anthropic-ai/claude-code`, `@openai/codex`, and `dev-sessions-mcp`.
+- Entry point `/entrypoint.sh` that merges host OAuth, injects MCP config if missing, and sets `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767` at runtime).
 
-This repository provides a Docker-based setup for running Claude Code CLI in an isolated Ubuntu development container. The system allows users to run Claude Code without installing it directly on their macOS system, providing a consistent and isolated development environment.
+## Key Components
+- `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1`, installs dev-sessions-mcp, and ensures `/root/.claude` and `/root/.codex` exist. Entry point auto-adds a `dev-sessions` MCP block to both `~/.claude.json` and `~/.codex/config.toml`.
+ - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`). They:
+  - Mount the target project to `/workspace` and set it as `-w`.
+  - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
+  - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
+  - Pass `HOST_PATH` (for dev-sessions MCP) and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
+- `dev-sessions/`: Gateway + MCP client for handoff workflows. Bootstrap via `dev-sessions/scripts/bootstrap-dev-sessions.sh`; sample MCP config in `sample-mcp-config.json`.
 
-## Architecture
+## Authentication Behavior
+- Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.
+- Codex: `~/.codex` is mounted; entrypoint only creates `config.toml` with the `dev-sessions` MCP if it is missing. Gateway selection happens via `DEV_SESSIONS_GATEWAY_URL` env (default `http://host.docker.internal:6767`). Login once via `codex login` (or pipe `OPENAI_API_KEY` to `codex login --with-api-key`).
 
-The project consists of three main components:
-1. **Docker Image** (Dockerfile.ubuntu-dev): Ubuntu 24.04 container with development tools and Claude Code CLI
-2. **Shell Function** (claude-docker): Zsh function that manages Docker container execution with proper volume mounts
-3. **Volume Mounts**: Project directory and Neovim configuration are mounted into the container
-
-## Authentication Setup
-
-Two authentication methods are supported: OAuth (recommended) and API key (optional).
-
-### OAuth Authentication (Recommended)
-
-OAuth credentials from your host machine are automatically synced to the container via an entrypoint script.
-
-**How It Works:**
-1. Host's `~/.claude.json` is mounted read-only as `/root/.claude.host.json`
-2. Entrypoint script extracts OAuth tokens (`oauthAccount`, `userID`, etc.)
-3. Credentials are merged into container's `/root/.claude.json` at startup
-4. `~/.claude` directory is mounted read-write to persist authentication
-
-**First-Time Setup:**
+## Typical Usage
 ```bash
-# Option 1: Authenticate on host (recommended)
-claude auth login
-
-# Option 2: Authenticate in container (first run only)
-claude-docker .
-# Inside container:
-/login
-```
-
-Once authenticated, all future containers automatically have access.
-
-### API Key Authentication (Optional)
-
-If `ANTHROPIC_API_KEY` is set in your shell environment, it will be automatically passed through to the container. Useful for CI/CD or automated workflows.
-
-## Common Commands
-
-### Building and Rebuilding
-```bash
-# Build or rebuild the Docker image after changes
+# Build or rebuild the image
 docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
+
+# Launch Claude
+clauded                  # current dir
+clauded /path/to/proj    # specific dir
+clauded . "-p 3000:3000" # with port mapping
+
+# Launch Codex
+codexed
+codexed /path/to/proj "-p 5173:5173 -e NODE_ENV=development"
 ```
+Inside the container run `/login` (Claude) or `codex login` once to seed credentials.
 
-### Testing Changes
-```bash
-# Test the Docker container directly
-docker run -it --rm -v "$(pwd):/workspace" -w /workspace ubuntu-dev /bin/bash
+## Dev-Sessions MCP Expectations
+- `dev-sessions-mcp` is available in the image and auto-registered in both CLI configs.
+- Gateway defaults to `host.docker.internal:6767` unless `DEV_SESSIONS_GATEWAY_URL` is set.
+- `HOST_PATH` from the helper functions gives the MCP the correct workspace path.
+- See `dev-sessions/README.md` for gateway details and tmux-based handoff flow.
 
-# Test with the shell function
-source ~/.zshrc
-claude-docker .
-```
-
-## Key Implementation Details
-
-### Docker Configuration
-- Base image: Ubuntu 24.04
-- Working directory: `/workspace`
-- Entrypoint script handles OAuth credential merging at startup
-- Claude Code runs with `--dangerously-skip-permissions` flag due to container environment constraints
-
-### Shell Function
-The `claude-docker` function in `~/.zshrc` handles:
-- **Path conversion**: Relative paths are converted to absolute before mounting
-- **OAuth credential mounting**: `~/.claude.json` is mounted read-only as `/root/.claude.host.json`
-- **Persistence**: `~/.claude` directory is mounted read-write for auth persistence
-- **Full paths**: Uses `/usr/local/bin/docker` to avoid PATH issues on macOS
-
-### Port Mapping Support
-
-The function accepts extra Docker arguments as a second parameter, enabling port mapping for web development:
-
-```bash
-claude-docker . "-p 3000:3000"
-```
-
-## Development Considerations
-
-When modifying this project:
-
-1. Changes to the Docker image require rebuilding with `docker build`
-2. The container is ephemeral - removed after each session
-3. The shell function uses `/usr/local/bin/docker` full path to avoid PATH issues on macOS
-4. Volume mounts preserve project files and Neovim configuration between sessions
+## Maintenance Notes
+- Rebuild with `rebuild.sh` for a no-cache build.
+- Git is pre-configured system-wide (user/email set) and `safe.directory` is `*`.
+- Containers are ephemeral; mounted directories (`/workspace`, `~/.claude`, `~/.codex`, `~/.local/share/nvim`) persist your changes and auth tokens.
