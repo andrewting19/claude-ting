@@ -35,6 +35,8 @@ claude-docker() {
 
     # Pass host workspace path for dev-sessions MCP
     docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
+    # Point PostgreSQL to host
+    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
 
     docker_cmd="$docker_cmd -v \"$path:/workspace\""
     docker_cmd="$docker_cmd -w /workspace"
@@ -88,6 +90,8 @@ codex-docker() {
     local docker_cmd="/usr/local/bin/docker run -it --rm"
 
     docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
+    # Point PostgreSQL to host
+    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
     # Ensure MCP inside container points to host gateway
     docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
     docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"

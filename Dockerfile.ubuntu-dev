@@ -50,6 +50,29 @@ RUN git clone --depth=1 https://github.com/pyenv/pyenv.git $PYENV_ROOT && \
     pyenv install 3.12 && \
     pyenv global 3.12
 
+# Install commonly useful Python packages
+RUN pip install --no-cache-dir \
+    beautifulsoup4 \
+    requests \
+    numpy \
+    pandas \
+    scipy \
+    matplotlib \
+    seaborn \
+    scikit-learn \
+    pytest \
+    python-dotenv \
+    psycopg2-binary \
+    SQLAlchemy \
+    tqdm \
+    colorama \
+    psutil \
+    lz4 \
+    optuna \
+    numba \
+    fake-useragent \
+    hrequests
+
 # Install nvm and Node.js
 ENV NVM_DIR=/opt/nvm
 ENV NODE_VERSION=22
@@ -64,15 +87,18 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     nvm use default && \
     npm install -g yarn && \
     npm install -g tsx && \
-    npm install -g @anthropic-ai/claude-code && \
     npm install -g @openai/codex && \
     ln -s \$(which node) /usr/local/bin/node && \
     ln -s \$(which npm) /usr/local/bin/npm && \
     ln -s \$(which npx) /usr/local/bin/npx && \
     ln -s \$(which yarn) /usr/local/bin/yarn && \
     ln -s \$(which tsx) /usr/local/bin/tsx && \
-    ln -s \$(which claude) /usr/local/bin/claude && \
     ln -s \$(which codex) /usr/local/bin/codex"
+
+# Install Claude Code using native binary (latest version)
+RUN curl -fsSL https://claude.ai/install.sh | bash -s latest && \
+    ln -s /root/.local/bin/claude /usr/local/bin/claude
+ENV PATH="/root/.local/bin:$PATH"
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash

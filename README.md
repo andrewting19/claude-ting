@@ -195,6 +195,24 @@ claude-ting/
 └── CLAUDE.md                 # Instructions for Claude Code itself
 ```
 
+## 🤖 Dev Sessions (Multi-Agent Handoff)
+
+The `dev-sessions/` directory contains an MCP-based system that lets Claude spawn and communicate with other Claude instances via tmux. This enables task delegation and parallel development workflows—one Claude can hand off work to another and monitor its progress.
+
+**What it does:**
+- Create new Claude Code sessions from within an existing session
+- Send context/instructions to spawned sessions
+- Read output from other sessions to monitor progress
+- Automatic session tracking and cleanup
+
+**Quick example:**
+```
+User: "Hand off the auth implementation to another Claude"
+Claude: [creates dev session, sends context, returns tmux attach command]
+```
+
+See [`dev-sessions/README.md`](dev-sessions/README.md) for full setup instructions and usage details.
+
 ## 🔧 Technical Details
 
 ### Docker Command Breakdown
