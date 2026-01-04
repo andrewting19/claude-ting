@@ -25,6 +25,27 @@ RUN apt-get update && apt-get install -y \
     pulseaudio-utils \
     alsa-utils \
     sox \
+    # GitHub CLI
+    gh \
+    # Browser automation (virtual display) - chromium installed separately via PPA
+    xvfb \
+    fonts-liberation \
+    libnss3 \
+    libxss1 \
+    libasound2t64 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    # For add-apt-repository
+    software-properties-common \
     # Dependencies for pyenv
     libbz2-dev \
     libffi-dev \
@@ -39,6 +60,12 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Chromium from xtradeb PPA (supports arm64 and amd64, avoids snap issues in Docker)
+RUN add-apt-repository -y ppa:xtradeb/apps && \
+    apt-get update && \
+    apt-get install -y chromium chromium-driver && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install pyenv
 ENV PYENV_ROOT=/opt/pyenv
@@ -71,7 +98,9 @@ RUN pip install --no-cache-dir \
     optuna \
     numba \
     fake-useragent \
-    hrequests
+    hrequests \
+    websocket-client \
+    playwright
 
 # Install nvm and Node.js
 ENV NVM_DIR=/opt/nvm
@@ -103,6 +132,40 @@ ENV PATH="/root/.local/bin:$PATH"
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
+
+# Install uv (fast pip replacement)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Node memory limit for large codebases (prevents OOM crashes)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Install Playwright MCP server (used conditionally when ENABLE_BROWSER=1)
+RUN bash -c "source $NVM_DIR/nvm.sh && npm install -g @playwright/mcp"
+
+# Virtual display for browser automation
+ENV DISPLAY=:99
+ENV CHROME_CDP_PORT=9222
+ENV CHROME_USER_DATA_DIR=/root/.chrome-profile
+
+# Create browser launch script
+RUN mkdir -p /root/.chrome-profile && \
+    cat > /usr/local/bin/start-browser << 'BROWSEREOF'
+#!/bin/bash
+# Launch Chromium with CDP enabled for agent automation
+chromium \
+  --no-sandbox \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --remote-debugging-port=${CHROME_CDP_PORT:-9222} \
+  --remote-allow-origins=* \
+  --user-data-dir=${CHROME_USER_DATA_DIR:-/root/.chrome-profile} \
+  --window-size=1920,1080 \
+  "$@" &
+echo "Chromium started with CDP on port ${CHROME_CDP_PORT:-9222}"
+echo "Connect via: ws://localhost:${CHROME_CDP_PORT:-9222}/devtools/browser"
+BROWSEREOF
+RUN chmod +x /usr/local/bin/start-browser
 
 # Install dev-sessions-mcp
 COPY dev-sessions/mcp /opt/dev-sessions-mcp
@@ -143,6 +206,19 @@ RUN echo '# Pyenv initialization' >> /etc/bash.bashrc && \
 # Create entrypoint script to merge OAuth credentials and MCP config
 RUN cat > /entrypoint.sh << 'EOF'
 #!/bin/bash
+
+# Conditionally start browser automation (set ENABLE_BROWSER=1 to activate)
+if [ "$ENABLE_BROWSER" = "1" ]; then
+  if ! pgrep -x "Xvfb" > /dev/null; then
+    echo "✓ Starting Xvfb on display :99"
+    Xvfb :99 -screen 0 1920x1080x24 &
+    sleep 1
+  fi
+
+  # Start Chromium with CDP (uses start-browser script)
+  start-browser
+  sleep 2
+fi
 
 # Ensure the dev-sessions gateway hostname resolves from Docker
 if [ -z "$DEV_SESSIONS_GATEWAY_URL" ]; then
@@ -191,6 +267,19 @@ if [ -f "/root/.claude.json" ]; then
       }' \
      /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
   echo "✓ Ensured dev-sessions MCP entry in ~/.claude.json"
+
+  # Add Playwright MCP if browser is enabled
+  if [ "$ENABLE_BROWSER" = "1" ]; then
+    jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
+       '.mcpServers["playwright"] = {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["@playwright/mcp", "--cdp-endpoint", $cdp],
+          "env": {}
+        }' \
+       /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+    echo "✓ Added Playwright MCP (connecting to CDP on port ${CHROME_CDP_PORT:-9222})"
+  fi
 fi
 
 # Ensure MCP configuration exists (gets overwritten by mount)
@@ -219,6 +308,18 @@ else
   else
     echo "✓ MCP configuration already present"
   fi
+fi
+
+# Add Playwright MCP to config.json if browser is enabled
+if [ "$ENABLE_BROWSER" = "1" ] && [ -f "/root/.claude/config.json" ]; then
+  jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
+     '.mcpServers["playwright"] = {
+        "command": "npx",
+        "args": ["@playwright/mcp", "--cdp-endpoint", $cdp]
+      }' \
+     /root/.claude/config.json > /root/.claude/config.json.tmp && \
+     mv /root/.claude/config.json.tmp /root/.claude/config.json
+  echo "✓ Added Playwright MCP to config.json"
 fi
 
 # Prepare Codex config in a shadow copy to avoid modifying host ~/.codex

@@ -53,6 +53,7 @@ claude-docker() {
         docker_cmd="$docker_cmd $extra_args"
     fi
 
+    # Expose CDP port for browser automation (optional, use -p 9222:9222 in extra_args)
     docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions"
 
     # Execute the command
@@ -61,6 +62,11 @@ claude-docker() {
 
 # Alias for easier access
 alias clauded='claude-docker'
+
+# Browser-enabled variant
+claudedb() {
+    claude-docker "${1:-.}" "-e ENABLE_BROWSER=1 ${2}"
+}
 
 codex-docker() {
     local path="$(pwd)"
@@ -136,3 +142,9 @@ echo "Usage:"
 echo "  codexed                    # Current directory"
 echo "  codexed /path/to/project   # Specific path"
 echo "  codexed . \"-p 3000:3000\"   # With port mapping"
+echo ""
+echo "Browser automation (adds Playwright MCP for web browsing):"
+echo "  claudedb                        # Current dir with browser"
+echo "  claudedb /path/to/project       # Specific path with browser"
+echo "  claudedb . \"-p 9222:9222\"       # With external CDP access"
+echo "  # Starts Xvfb, Chromium with CDP, and adds Playwright MCP to agent config"

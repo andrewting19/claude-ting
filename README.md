@@ -34,6 +34,9 @@ clauded /path/to/my-project
 
 # Develop a web app with port mapping
 clauded . "-p 3000:3000"
+
+# Run with browser automation (Playwright MCP)
+claudedb
 ```
 
 That's it! Claude Code runs instantly without any permission dialogs.
@@ -116,12 +119,13 @@ Docker Container (ubuntu-dev)
    - Codex CLI (`@openai/codex`)
    - Entrypoint script for OAuth credential merging and default MCP config generation (creates `dev-sessions` block if missing; prefers runtime env `DEV_SESSIONS_GATEWAY_URL`, default `http://host.docker.internal:6767`)
 
-2. **Shell Functions (`claude-docker`, `codex-docker`)**: Zsh helpers that:
+2. **Shell Functions (`claude-docker`, `codex-docker`, `claudedb`)**: Zsh helpers that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
    - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
    - Passes `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767`) so MCP traffic hits the host gateway when running inside Docker
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
+   - `claudedb` variant enables browser automation with Chromium + Playwright MCP
 
 3. **Volume Mounts**:
    - Project directory → `/workspace` (working directory)
@@ -176,6 +180,26 @@ clauded . "-p 8080:8080 -e NODE_ENV=development"
 **Port mapping format**: `-p HOST:CONTAINER` (e.g., `-p 3000:3000` makes `localhost:3000` work)
 
 All of these flags work identically with `codexed` if you prefer the Codex workflow.
+
+### Browser Automation
+
+Use `claudedb` to launch Claude with browser automation enabled. This starts Chromium with CDP (Chrome DevTools Protocol) and adds the Playwright MCP server:
+
+```bash
+# Current directory with browser
+claudedb
+
+# Specific project with browser
+claudedb /path/to/project
+
+# With external CDP access (for debugging)
+claudedb . "-p 9222:9222"
+```
+
+When browser is enabled:
+- Xvfb virtual display starts on `:99`
+- Chromium launches with CDP on port 9222
+- Playwright MCP provides tools: `browser_navigate`, `browser_click`, `browser_snapshot`, `browser_fill_form`, etc.
 
 ### Codex CLI workflow
 
