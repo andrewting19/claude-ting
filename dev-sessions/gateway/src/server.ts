@@ -34,16 +34,17 @@ app.use((req, res, next) => {
 
 /**
  * POST /create-session
- * Creates a new Claude developer session in tmux
+ * Creates a new developer session in tmux
  *
  * Body:
  *   - hostPath: string (workspace path on host)
  *   - description?: string (optional description)
  *   - creator?: string (optional creator identifier)
+ *   - cli?: 'claude' | 'codex' (optional, defaults to 'claude')
  */
 app.post('/create-session', async (req: Request, res: Response) => {
   try {
-    const { hostPath, description, creator } = req.body;
+    const { hostPath, description, creator, cli } = req.body;
 
     if (!hostPath || typeof hostPath !== 'string') {
       return res.status(400).json({
@@ -63,6 +64,14 @@ app.post('/create-session', async (req: Request, res: Response) => {
     if (!/^[a-zA-Z0-9\/_.\- ]+$/.test(hostPath)) {
       return res.status(400).json({
         error: 'hostPath contains invalid characters. Only alphanumeric, /, -, _, ., and spaces are allowed'
+      });
+    }
+
+    // Validate cli parameter if provided
+    const cliChoice = cli || 'claude';
+    if (cliChoice !== 'claude' && cliChoice !== 'codex') {
+      return res.status(400).json({
+        error: 'cli must be either "claude" or "codex"'
       });
     }
 
@@ -103,9 +112,9 @@ app.post('/create-session', async (req: Request, res: Response) => {
     );
 
     // Create tmux session on host
-    await tmux.createSession(session.tmux_session_name, hostPath);
+    await tmux.createSession(session.tmux_session_name, hostPath, cliChoice);
 
-    console.log(`✓ Created session: ${sessionId} (${session.tmux_session_name})`);
+    console.log(`✓ Created session: ${sessionId} (${session.tmux_session_name}) using ${cliChoice}`);
 
     res.json({
       sessionId,

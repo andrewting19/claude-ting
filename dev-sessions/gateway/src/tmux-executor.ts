@@ -54,29 +54,32 @@ export class TmuxExecutor {
   }
 
   /**
-   * Creates a new tmux session running clauded (or claude)
+   * Creates a new tmux session running clauded or codexed
    * Creates an interactive shell so .zshrc is loaded (for aliases, PATH, etc.)
    * Automatically dismisses the API key prompt
    */
-  async createSession(tmuxSessionName: string, workspacePath: string): Promise<void> {
+  async createSession(tmuxSessionName: string, workspacePath: string, cli: 'claude' | 'codex' = 'claude'): Promise<void> {
     // Escape single quotes in workspace path for send-keys
     const escapedPath = workspacePath.replace(/'/g, "'\\''");
 
+    // Choose the docker helper command based on cli
+    const cliCommand = cli === 'codex' ? 'codexed' : 'clauded';
+
     // Create session without command (starts interactive shell)
-    // Then send keys to cd and run clauded
+    // Then send keys to cd and run the chosen cli
     // Wait 5 seconds for API key prompt to appear, then dismiss it
-    const command = `tmux new-session -d -s ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && clauded .' C-m && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
+    const command = `tmux new-session -d -s ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand} .' C-m && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
 
     await this.execSSH(command);
   }
 
   /**
-   * Checks if Claude is running in a tmux session
-   * Returns true if claude or docker (running claude) is found
+   * Checks if an AI CLI (Claude or Codex) is running in a tmux session
+   * Returns true if claude, codex, or docker (running either) is found
    */
-  async isClaudeRunning(tmuxSessionName: string): Promise<boolean> {
+  async isCliRunning(tmuxSessionName: string): Promise<boolean> {
     try {
-      const command = `tmux list-panes -t ${tmuxSessionName} -F '#{pane_tty}' | xargs -I {} ps -t {} | grep -E '(claude|docker.*ubuntu-dev.*claude)'`;
+      const command = `tmux list-panes -t ${tmuxSessionName} -F '#{pane_tty}' | xargs -I {} ps -t {} | grep -E '(claude|codex|docker.*ubuntu-dev)'`;
 
       const output = await this.execSSH(command);
       return output.trim().length > 0;
@@ -88,13 +91,13 @@ export class TmuxExecutor {
 
   /**
    * Sends a message to a tmux session (literal text + Enter twice)
-   * Checks that Claude is running before sending
-   * Claude Code requires two Enters: first creates newline, second submits
+   * Checks that an AI CLI is running before sending
+   * Both CLIs require two Enters: first creates newline, second submits
    */
   async sendMessage(tmuxSessionName: string, message: string): Promise<void> {
-    // Check: Claude must be running before we send
-    if (!(await this.isClaudeRunning(tmuxSessionName))) {
-      throw new Error('Claude is not running in this session - refusing to send message');
+    // Check: CLI must be running before we send
+    if (!(await this.isCliRunning(tmuxSessionName))) {
+      throw new Error('No AI CLI (Claude/Codex) is running in this session - refusing to send message');
     }
 
     // Send the message literally through base64 + here-doc so no shell interprets it

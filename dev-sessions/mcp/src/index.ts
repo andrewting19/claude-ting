@@ -163,6 +163,11 @@ The session is created in the same workspace directory as your current session.`
               type: 'string',
               description: 'Brief description of what this dev session is for (e.g., "Implementing user authentication")',
             },
+            cli: {
+              type: 'string',
+              enum: ['claude', 'codex'],
+              description: 'Which CLI to use: "claude" (default) or "codex"',
+            },
           },
           required: [],
         },
@@ -208,6 +213,8 @@ Safety: This tool verifies that a developer is actually running in the target se
 
 Use this to check what another developer has output recently. This is useful for monitoring their progress or checking if they have questions for you.
 
+Timing: Wait 30-60s before reading for complex tasks; simple queries may complete in ~10s.
+
 Returns the last N lines of terminal output from the session.`,
         inputSchema: {
           type: 'object',
@@ -246,8 +253,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           console.error(`HOST_PATH not set, using current directory: ${hostPath}`);
         }
 
-        // Get optional description and creator from args
+        // Get optional description, cli, and creator from args
         const description = (args as any).description || 'Dev session handoff';
+        const cli = (args as any).cli || 'claude'; // Default to claude
         const creator = getCreatorId();
 
         // Create session via gateway
@@ -257,6 +265,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             hostPath,
             description,
             creator,
+            cli,
           }),
         });
 
