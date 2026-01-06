@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "${DEV_SESSIONS_GATEWAY_PORT:-6767}:6767"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SSH_USER: "${SSH_USER:?Set SSH_USER in dev-sessions/gateway/.env}"
       SSH_HOST: "${SSH_HOST:-host.docker.internal}"
