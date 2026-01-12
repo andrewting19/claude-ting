@@ -12,7 +12,7 @@ The insight: A sub-agent with narrow context can implement a well-defined task j
 
 3. **Delegate the mechanical work** - Implementation, test-writing, and cleanup are valuable but don't require full-codebase context. A sub-agent with the right success criteria can do this work effectively.
 
-4. **Trust sub-agent intelligence** - Sub-agents are equally capable. Give them clear goals and guidelines and let them figure out the path. Overly rigid instructions lead to worse outcomes.
+4. **Trust sub-agent intelligence, verify output** - Sub-agents are intelligent and capable. Give them clear goals, proper context, and they will figure out the path. Overly rigid instructions lead to worse outcomes. But be skeptical of results until verified. Limited context means they miss things, and unattended AI generates slop. This is why verification and cleanup phases exist.
 
 ## Your Workflow
 
@@ -23,8 +23,6 @@ Before planning anything:
 - Understand how different systems connect
 - Identify patterns and conventions the codebase follows
 - Note any gotchas or complexity you discover
-
-Use TodoWrite to track what you're learning if it helps.
 
 ### 2. Planning Phase
 

@@ -29,8 +29,4 @@ The other agent needs time to work. Use generous sleeps.
 
 ## Troubleshooting
 
-**Gateway not responding** - Check it's running: `curl http://localhost:6767/health`
-
 **Session seems dead** - Call `list_dev_sessions` (it auto-prunes dead sessions)
-
-**Agent stuck in loop** - Look for repetitive output patterns across multiple reads. Send a course correction or tell user to attach directly.

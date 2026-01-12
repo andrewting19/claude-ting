@@ -70,13 +70,15 @@ Things you learned that aren't obvious from the code:
 
 ## Guidelines for Writing Briefings
 
-**Include critical details** - Some things are essential for the next agent to know. Business logic, non-obvious constraints, specific requirements - don't omit these just to be concise.
+**Be thorough where it matters** - Complex business logic, non-obvious constraints, nuanced requirements - explain these fully. Don't omit critical details just to be concise.
+
+**Be concise where you can** - Don't waste tokens on things the receiving agent can figure out. They're intelligent. Give them files and they can explore the code themselves.
+
+**Stay focused** - Include what's relevant to the task. Skip tangential context that won't help them succeed.
 
 **Include the "why"** - Decisions without reasoning are hard to build on. If you chose approach A over B, say why.
 
 **Mention what didn't work** - Failed approaches are valuable context. The next agent shouldn't repeat your mistakes.
-
-**Be comprehensive where it matters** - If something is complex or nuanced, explain it fully. The goal is successful continuation, not brevity.
 
 ## After Sending
 
