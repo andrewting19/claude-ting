@@ -1,11 +1,16 @@
+---
+name: handoff
+description: Hand off work to a fresh dev session when context is running long. Creates a briefing and spawns a new session the user can attach to.
+---
+
 # Handoff Skill
 
 Use this skill when context is running long and you need to hand off work to a fresh session. Instead of compacting and losing nuance, create a comprehensive briefing and spawn a new dev session that can continue with full context.
 
 ## When to Use
 
-- Context is getting long and quality may degrade
 - User explicitly requests a handoff
+- Context is getting long and quality may degrade
 - You've accumulated significant context that would be lost in compaction
 - The remaining work is substantial enough to warrant a fresh session
 

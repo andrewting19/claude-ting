@@ -1,3 +1,8 @@
+---
+name: dev-control
+description: Orchestrate another dev session in real-time. Send tasks, monitor progress via polling, and provide follow-ups without the user attaching.
+---
+
 # Dev Session Interactive Control
 
 Use this skill to orchestrate another dev session in real-time - sending tasks, monitoring progress, and providing follow-ups without the user attaching.
