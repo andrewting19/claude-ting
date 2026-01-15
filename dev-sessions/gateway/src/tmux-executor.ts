@@ -65,10 +65,10 @@ export class TmuxExecutor {
     // Choose the docker helper command based on cli
     const cliCommand = cli === 'codex' ? 'codexed' : 'clauded';
 
-    // Create session without command (starts interactive shell)
+    // Create session with explicit window name (so agentboard shows the session name, not "docker")
     // Then send keys to cd and run the chosen cli
     // Wait 5 seconds for API key prompt to appear, then dismiss it
-    const command = `tmux new-session -d -s ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand} .' C-m && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
+    const command = `tmux new-session -d -s ${tmuxSessionName} -n ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand} .' C-m && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
 
     await this.execSSH(command);
   }
