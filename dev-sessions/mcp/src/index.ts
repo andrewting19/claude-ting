@@ -9,6 +9,35 @@ import {
 import { execSync } from 'child_process';
 
 /**
+ * Tool definition interface for searchable tools
+ */
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, {
+      type: string;
+      description?: string;
+      enum?: string[];
+    }>;
+    required: string[];
+  };
+  // Additional metadata for search optimization
+  keywords?: string[];
+}
+
+/**
+ * Search result interface
+ */
+interface ToolSearchResult {
+  tool_name: string;
+  description: string;
+  relevance_score: number;
+  matched_fields: string[];
+}
+
+/**
  * Gateway server URL
  * - DEV_SESSIONS_GATEWAY_URL is a docker-specific override so we don't have to edit host config
  * - Otherwise defer to the value provided by Claude's MCP config (GATEWAY_URL)
@@ -124,6 +153,260 @@ async function gatewayRequest(path: string, options: RequestInit = {}): Promise<
 }
 
 /**
+ * Tool definitions for searchable tool catalog
+ * This allows dynamic tool discovery via search
+ */
+const TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: 'create_dev_session',
+    description: `Creates a new developer session.
+
+This spawns a fresh developer that you can hand off work to. The new developer will run independently, and you can communicate with them by sending messages.
+
+Use this when you want to:
+- Delegate a subtask to another developer
+- Hand off the next phase of development
+- Parallelize work across multiple developer sessions
+
+The session is created in the same workspace directory as your current session.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description: 'Brief description of what this dev session is for (e.g., "Implementing user authentication")',
+        },
+        cli: {
+          type: 'string',
+          enum: ['claude', 'codex'],
+          description: 'Which CLI to use: "claude" (default) or "codex"',
+        },
+      },
+      required: [],
+    },
+    keywords: ['create', 'spawn', 'new', 'session', 'delegate', 'handoff', 'parallel', 'developer', 'tmux'],
+  },
+  {
+    name: 'list_dev_sessions',
+    description: `Lists all active developer sessions that were created through this system.
+
+Shows session IDs, descriptions, workspace paths, and creation times. Use this to see what other developers are available to communicate with.`,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+    keywords: ['list', 'show', 'all', 'sessions', 'active', 'developers', 'available'],
+  },
+  {
+    name: 'send_dev_message',
+    description: `Sends a message to another developer session.
+
+Use this to communicate with developers you've created. The message will appear as user input to the target developer, as if the user typed it directly.
+
+IMPORTANT: Only send messages to sessions you created. The message will be delivered exactly as provided, so format it clearly (e.g., start with "## Context" or "## Task" for clarity).
+
+Safety: This tool verifies that a developer is actually running in the target session before sending the message. If the developer has exited, the send will fail to prevent accidentally executing shell commands.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'The session ID to send the message to (e.g., "riven-jg")',
+        },
+        message: {
+          type: 'string',
+          description: 'The message to send to the developer',
+        },
+      },
+      required: ['sessionId', 'message'],
+    },
+    keywords: ['send', 'message', 'communicate', 'talk', 'input', 'write', 'task', 'instruct'],
+  },
+  {
+    name: 'read_dev_output',
+    description: `Reads recent output from a developer session.
+
+Use this to check what another developer has output recently. This is useful for monitoring their progress or checking if they have questions for you.
+
+Timing: Wait 30-60s before reading for complex tasks; simple queries may complete in ~10s.
+
+Returns the last N lines of terminal output from the session.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: 'The session ID to read output from (e.g., "riven-jg")',
+        },
+        lines: {
+          type: 'number',
+          description: 'Number of lines to read (default: 100, max: 1000)',
+        },
+      },
+      required: ['sessionId'],
+    },
+    keywords: ['read', 'output', 'check', 'progress', 'response', 'terminal', 'monitor', 'status'],
+  },
+];
+
+/**
+ * Searches tools using keyword matching (case-insensitive substring)
+ */
+function searchToolsByKeyword(query: string, tools: ToolDefinition[]): ToolSearchResult[] {
+  const queryLower = query.toLowerCase();
+  const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 0);
+
+  const results: ToolSearchResult[] = [];
+
+  for (const tool of tools) {
+    let relevanceScore = 0;
+    const matchedFields: string[] = [];
+
+    // Search in tool name (highest weight)
+    const nameLower = tool.name.toLowerCase();
+    for (const term of queryTerms) {
+      if (nameLower.includes(term)) {
+        relevanceScore += 10;
+        if (!matchedFields.includes('name')) matchedFields.push('name');
+      }
+    }
+
+    // Search in description (medium weight)
+    const descLower = tool.description.toLowerCase();
+    for (const term of queryTerms) {
+      if (descLower.includes(term)) {
+        relevanceScore += 5;
+        if (!matchedFields.includes('description')) matchedFields.push('description');
+      }
+    }
+
+    // Search in parameter names and descriptions (lower weight)
+    for (const [paramName, paramDef] of Object.entries(tool.inputSchema.properties)) {
+      const paramNameLower = paramName.toLowerCase();
+      const paramDescLower = (paramDef.description || '').toLowerCase();
+
+      for (const term of queryTerms) {
+        if (paramNameLower.includes(term)) {
+          relevanceScore += 3;
+          if (!matchedFields.includes(`param:${paramName}`)) matchedFields.push(`param:${paramName}`);
+        }
+        if (paramDescLower.includes(term)) {
+          relevanceScore += 2;
+          if (!matchedFields.includes(`param:${paramName}`)) matchedFields.push(`param:${paramName}`);
+        }
+      }
+    }
+
+    // Search in keywords (medium weight)
+    if (tool.keywords) {
+      for (const keyword of tool.keywords) {
+        for (const term of queryTerms) {
+          if (keyword.toLowerCase().includes(term)) {
+            relevanceScore += 4;
+            if (!matchedFields.includes('keywords')) matchedFields.push('keywords');
+          }
+        }
+      }
+    }
+
+    if (relevanceScore > 0) {
+      results.push({
+        tool_name: tool.name,
+        description: tool.description.split('\n')[0], // First line only for summary
+        relevance_score: relevanceScore,
+        matched_fields: matchedFields,
+      });
+    }
+  }
+
+  // Sort by relevance score descending
+  return results.sort((a, b) => b.relevance_score - a.relevance_score);
+}
+
+/**
+ * Searches tools using regex pattern matching
+ */
+function searchToolsByRegex(pattern: string, tools: ToolDefinition[]): ToolSearchResult[] {
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, 'i'); // Case-insensitive by default
+  } catch (error: any) {
+    throw new Error(`Invalid regex pattern: ${error.message}`);
+  }
+
+  const results: ToolSearchResult[] = [];
+
+  for (const tool of tools) {
+    let relevanceScore = 0;
+    const matchedFields: string[] = [];
+
+    // Search in tool name (highest weight)
+    if (regex.test(tool.name)) {
+      relevanceScore += 10;
+      matchedFields.push('name');
+    }
+
+    // Search in description (medium weight)
+    if (regex.test(tool.description)) {
+      relevanceScore += 5;
+      matchedFields.push('description');
+    }
+
+    // Search in parameter names and descriptions (lower weight)
+    for (const [paramName, paramDef] of Object.entries(tool.inputSchema.properties)) {
+      if (regex.test(paramName)) {
+        relevanceScore += 3;
+        matchedFields.push(`param:${paramName}`);
+      }
+      if (paramDef.description && regex.test(paramDef.description)) {
+        relevanceScore += 2;
+        if (!matchedFields.includes(`param:${paramName}`)) matchedFields.push(`param:${paramName}`);
+      }
+    }
+
+    // Search in keywords (medium weight)
+    if (tool.keywords) {
+      for (const keyword of tool.keywords) {
+        if (regex.test(keyword)) {
+          relevanceScore += 4;
+          if (!matchedFields.includes('keywords')) matchedFields.push('keywords');
+          break; // Only count keywords once
+        }
+      }
+    }
+
+    if (relevanceScore > 0) {
+      results.push({
+        tool_name: tool.name,
+        description: tool.description.split('\n')[0], // First line only for summary
+        relevance_score: relevanceScore,
+        matched_fields: matchedFields,
+      });
+    }
+  }
+
+  // Sort by relevance score descending
+  return results.sort((a, b) => b.relevance_score - a.relevance_score);
+}
+
+/**
+ * Main search function that dispatches to the appropriate search method
+ */
+function searchTools(query: string, searchType: 'keyword' | 'regex' = 'keyword'): ToolSearchResult[] {
+  // Validate query length (similar to Anthropic's 200 char limit)
+  if (query.length > 200) {
+    throw new Error('Query too long: maximum 200 characters allowed');
+  }
+
+  if (searchType === 'regex') {
+    return searchToolsByRegex(query, TOOL_DEFINITIONS);
+  } else {
+    return searchToolsByKeyword(query, TOOL_DEFINITIONS);
+  }
+}
+
+/**
  * MCP Server for Dev Sessions
  */
 const server = new Server(
@@ -139,100 +422,57 @@ const server = new Server(
 );
 
 /**
+ * The search_tools tool definition (not included in TOOL_DEFINITIONS since it's the searcher)
+ */
+const SEARCH_TOOL_DEFINITION: ToolDefinition = {
+  name: 'search_tools',
+  description: `Search for available tools by keyword or regex pattern.
+
+Use this to discover what tools are available when you're not sure which tool to use. Searches tool names, descriptions, parameter names, parameter descriptions, and keywords.
+
+Returns a list of matching tools with their names, descriptions, and relevance scores. The results are sorted by relevance.
+
+Examples:
+- search_tools({ query: "session" }) - find tools related to sessions
+- search_tools({ query: "send.*message", search_type: "regex" }) - regex search for message-sending tools
+- search_tools({ query: "create spawn new" }) - keyword search with multiple terms`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Search query - keywords (space-separated) or regex pattern. Maximum 200 characters.',
+      },
+      search_type: {
+        type: 'string',
+        enum: ['keyword', 'regex'],
+        description: 'Search type: "keyword" (default) for case-insensitive substring matching across multiple terms, or "regex" for pattern matching.',
+      },
+      max_results: {
+        type: 'number',
+        description: 'Maximum number of results to return (default: 5, max: 20)',
+      },
+    },
+    required: ['query'],
+  },
+  keywords: ['search', 'find', 'discover', 'tools', 'available', 'query', 'lookup'],
+};
+
+/**
  * List available tools
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'create_dev_session',
-        description: `Creates a new developer session.
+  // Convert TOOL_DEFINITIONS to the format expected by MCP (strip keywords)
+  const tools = TOOL_DEFINITIONS.map(({ name, description, inputSchema }) => ({
+    name,
+    description,
+    inputSchema,
+  }));
 
-This spawns a fresh developer that you can hand off work to. The new developer will run independently, and you can communicate with them by sending messages.
+  // Add the search tool
+  tools.push(SEARCH_TOOL_DEFINITION);
 
-Use this when you want to:
-- Delegate a subtask to another developer
-- Hand off the next phase of development
-- Parallelize work across multiple developer sessions
-
-The session is created in the same workspace directory as your current session.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            description: {
-              type: 'string',
-              description: 'Brief description of what this dev session is for (e.g., "Implementing user authentication")',
-            },
-            cli: {
-              type: 'string',
-              enum: ['claude', 'codex'],
-              description: 'Which CLI to use: "claude" (default) or "codex"',
-            },
-          },
-          required: [],
-        },
-      },
-      {
-        name: 'list_dev_sessions',
-        description: `Lists all active developer sessions that were created through this system.
-
-Shows session IDs, descriptions, workspace paths, and creation times. Use this to see what other developers are available to communicate with.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          required: [],
-        },
-      },
-      {
-        name: 'send_dev_message',
-        description: `Sends a message to another developer session.
-
-Use this to communicate with developers you've created. The message will appear as user input to the target developer, as if the user typed it directly.
-
-IMPORTANT: Only send messages to sessions you created. The message will be delivered exactly as provided, so format it clearly (e.g., start with "## Context" or "## Task" for clarity).
-
-Safety: This tool verifies that a developer is actually running in the target session before sending the message. If the developer has exited, the send will fail to prevent accidentally executing shell commands.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description: 'The session ID to send the message to (e.g., "riven-jg")',
-            },
-            message: {
-              type: 'string',
-              description: 'The message to send to the developer',
-            },
-          },
-          required: ['sessionId', 'message'],
-        },
-      },
-      {
-        name: 'read_dev_output',
-        description: `Reads recent output from a developer session.
-
-Use this to check what another developer has output recently. This is useful for monitoring their progress or checking if they have questions for you.
-
-Timing: Wait 30-60s before reading for complex tasks; simple queries may complete in ~10s.
-
-Returns the last N lines of terminal output from the session.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description: 'The session ID to read output from (e.g., "riven-jg")',
-            },
-            lines: {
-              type: 'number',
-              description: 'Number of lines to read (default: 100, max: 1000)',
-            },
-          },
-          required: ['sessionId'],
-        },
-      },
-    ],
-  };
+  return { tools };
 });
 
 /**
@@ -379,6 +619,73 @@ The other developer should now see your message and respond to it. Use read_dev_
             },
           ],
         };
+      }
+
+      case 'search_tools': {
+        const { query, search_type, max_results } = args as any;
+
+        if (!query) {
+          throw new Error('query is required');
+        }
+
+        if (typeof query !== 'string') {
+          throw new Error('query must be a string');
+        }
+
+        // Validate and constrain max_results
+        const limit = Math.min(Math.max(max_results || 5, 1), 20);
+
+        // Perform the search
+        const results = searchTools(query, search_type || 'keyword');
+
+        // Limit results
+        const limitedResults = results.slice(0, limit);
+
+        if (limitedResults.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No tools found matching "${query}".
+
+Available tools in this MCP server:
+${TOOL_DEFINITIONS.map(t => `- ${t.name}: ${t.description.split('\n')[0]}`).join('\n')}`,
+              },
+            ],
+          };
+        }
+
+        // Format results with tool references for Claude API compatibility
+        // The response includes both human-readable text and structured tool_reference blocks
+        let output = `Found ${limitedResults.length} tool(s) matching "${query}":\n\n`;
+
+        for (const result of limitedResults) {
+          output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          output += `Tool: ${result.tool_name}\n`;
+          output += `Description: ${result.description}\n`;
+          output += `Relevance: ${result.relevance_score}\n`;
+          output += `Matched: ${result.matched_fields.join(', ')}\n`;
+        }
+
+        // Return content with both text and tool_reference blocks
+        // The tool_reference blocks allow Claude API to auto-expand tool definitions
+        const content: Array<{ type: string; text?: string; tool_name?: string }> = [
+          {
+            type: 'text',
+            text: output,
+          },
+        ];
+
+        // Add tool_reference blocks for each matched tool
+        // This enables deferred tool loading when used with Claude API's tool search feature
+        for (const result of limitedResults) {
+          content.push({
+            type: 'tool_reference',
+            tool_name: result.tool_name,
+          });
+        }
+
+        return { content };
       }
 
       default:

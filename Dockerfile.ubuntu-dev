@@ -74,8 +74,8 @@ RUN git clone --depth=1 https://github.com/pyenv/pyenv.git $PYENV_ROOT && \
     cd $PYENV_ROOT && \
     src/configure && \
     make -C src && \
-    pyenv install 3.12 && \
-    pyenv global 3.12
+    pyenv install 3.11 && \
+    pyenv global 3.11
 
 # Install commonly useful Python packages
 RUN pip install --no-cache-dir \
