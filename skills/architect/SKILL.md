@@ -48,7 +48,7 @@ For each implementation task, spawn a sub-agent using the Task tool (general-pur
 - **Guidelines** - Suggestions on approach, files that might be relevant, pitfalls to avoid.
 
 **What to avoid:**
-- Writing code for them - use natural language instructions, or at most high-level pseudocode
+- Writing code for them - use natural language instructions, or high-level pseudocode
 - Rigid boundaries unless truly necessary
 
 ### 4. Verification Phase

@@ -44,7 +44,7 @@ app.use((req, res, next) => {
  */
 app.post('/create-session', async (req: Request, res: Response) => {
   try {
-    const { hostPath, description, creator, cli } = req.body;
+    const { hostPath, description, creator, cli, mode } = req.body;
 
     if (!hostPath || typeof hostPath !== 'string') {
       return res.status(400).json({
@@ -72,6 +72,14 @@ app.post('/create-session', async (req: Request, res: Response) => {
     if (cliChoice !== 'claude' && cliChoice !== 'codex') {
       return res.status(400).json({
         error: 'cli must be either "claude" or "codex"'
+      });
+    }
+
+    // Validate mode parameter if provided
+    const modeChoice = mode || 'docker';
+    if (modeChoice !== 'docker' && modeChoice !== 'native') {
+      return res.status(400).json({
+        error: 'mode must be either "docker" or "native"'
       });
     }
 
@@ -112,9 +120,9 @@ app.post('/create-session', async (req: Request, res: Response) => {
     );
 
     // Create tmux session on host
-    await tmux.createSession(session.tmux_session_name, hostPath, cliChoice);
+    await tmux.createSession(session.tmux_session_name, hostPath, cliChoice, modeChoice);
 
-    console.log(`✓ Created session: ${sessionId} (${session.tmux_session_name}) using ${cliChoice}`);
+    console.log(`✓ Created session: ${sessionId} (${session.tmux_session_name}) using ${cliChoice} (${modeChoice})`);
 
     res.json({
       sessionId,

@@ -181,10 +181,15 @@ The session is created in the same workspace directory as your current session.`
           enum: ['claude', 'codex'],
           description: 'Which CLI to use: "claude" (default) or "codex"',
         },
+        mode: {
+          type: 'string',
+          enum: ['docker', 'native'],
+          description: 'Run mode: "docker" (default) uses clauded/codexed Docker wrappers, "native" runs claude/codex directly on the host',
+        },
       },
       required: [],
     },
-    keywords: ['create', 'spawn', 'new', 'session', 'delegate', 'handoff', 'parallel', 'developer', 'tmux'],
+    keywords: ['create', 'spawn', 'new', 'session', 'delegate', 'handoff', 'parallel', 'developer', 'tmux', 'docker', 'native'],
   },
   {
     name: 'list_dev_sessions',
@@ -493,9 +498,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           console.error(`HOST_PATH not set, using current directory: ${hostPath}`);
         }
 
-        // Get optional description, cli, and creator from args
+        // Get optional description, cli, mode, and creator from args
         const description = (args as any).description || 'Dev session handoff';
         const cli = (args as any).cli || 'claude'; // Default to claude
+        const mode = (args as any).mode || 'docker'; // Default to docker
         const creator = getCreatorId();
 
         // Create session via gateway
@@ -506,6 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             description,
             creator,
             cli,
+            mode,
           }),
         });
 

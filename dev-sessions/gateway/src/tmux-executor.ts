@@ -54,21 +54,35 @@ export class TmuxExecutor {
   }
 
   /**
-   * Creates a new tmux session running clauded or codexed
+   * Creates a new tmux session running claude/codex
    * Creates an interactive shell so .zshrc is loaded (for aliases, PATH, etc.)
-   * Automatically dismisses the API key prompt
+   * Automatically dismisses the API key prompt (docker mode only)
+   *
+   * @param mode - 'docker' uses clauded/codexed wrappers, 'native' runs claude/codex directly
    */
-  async createSession(tmuxSessionName: string, workspacePath: string, cli: 'claude' | 'codex' = 'claude'): Promise<void> {
+  async createSession(tmuxSessionName: string, workspacePath: string, cli: 'claude' | 'codex' = 'claude', mode: 'docker' | 'native' = 'docker'): Promise<void> {
     // Escape single quotes in workspace path for send-keys
     const escapedPath = workspacePath.replace(/'/g, "'\\''");
 
-    // Choose the docker helper command based on cli
-    const cliCommand = cli === 'codex' ? 'codexed' : 'clauded';
+    // Choose the command based on mode and cli
+    let cliCommand: string;
+    if (mode === 'native') {
+      // Run CLI directly without flags (user handles permissions)
+      cliCommand = cli;
+    } else {
+      // Use Docker wrappers
+      cliCommand = cli === 'codex' ? 'codexed' : 'clauded';
+    }
 
     // Create session with explicit window name (so agentboard shows the session name, not "docker")
     // Then send keys to cd and run the chosen cli
-    // Wait 5 seconds for API key prompt to appear, then dismiss it
-    const command = `tmux new-session -d -s ${tmuxSessionName} -n ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand} .' C-m && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
+    // Docker mode: dismiss API key prompt after startup
+    // Native mode: no prompt dismissal needed
+    let command = `tmux new-session -d -s ${tmuxSessionName} -n ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand}' C-m`;
+
+    if (mode === 'docker') {
+      command += ` && sleep 5 && tmux send-keys -t ${tmuxSessionName} C-m`;
+    }
 
     await this.execSSH(command);
   }
