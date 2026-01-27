@@ -147,6 +147,10 @@ RUN bash -c "source $NVM_DIR/nvm.sh && npm install -g @playwright/mcp"
 ENV DISPLAY=:99
 ENV CHROME_CDP_PORT=9222
 ENV CHROME_USER_DATA_DIR=/root/.chrome-profile
+# Disable D-Bus to suppress Chromium warnings in headless mode
+# (D-Bus is for desktop integration features not needed in containers)
+# To enable D-Bus: install dbus package and run `eval $(dbus-launch)` before Chromium
+ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
 
 # Create browser launch script
 RUN mkdir -p /root/.chrome-profile && \
