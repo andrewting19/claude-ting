@@ -257,6 +257,12 @@ if [ -f "/root/.claude.host.json" ]; then
   fi
 fi
 
+# Skip MCP setup if DISABLE_MCPS=1 (for isolated agent loops)
+if [ "$DISABLE_MCPS" = "1" ]; then
+  echo "✓ MCP setup disabled (DISABLE_MCPS=1)"
+  exec "$@"
+fi
+
 # Ensure dev-sessions MCP is configured in ~/.claude.json
 if [ -f "/root/.claude.json" ]; then
   jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" \
@@ -274,7 +280,7 @@ if [ -f "/root/.claude.json" ]; then
 
   # Add Playwright MCP if browser is enabled
   if [ "$ENABLE_BROWSER" = "1" ]; then
-    jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
+    jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
        '.mcpServers["playwright"] = {
           "type": "stdio",
           "command": "npx",
@@ -316,7 +322,7 @@ fi
 
 # Add Playwright MCP to config.json if browser is enabled
 if [ "$ENABLE_BROWSER" = "1" ] && [ -f "/root/.claude/config.json" ]; then
-  jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
+  jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
      '.mcpServers["playwright"] = {
         "command": "npx",
         "args": ["@playwright/mcp", "--cdp-endpoint", $cdp]
