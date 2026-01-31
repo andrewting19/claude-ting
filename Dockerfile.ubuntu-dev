@@ -151,23 +151,31 @@ ENV CHROME_USER_DATA_DIR=/root/.chrome-profile
 # (D-Bus is for desktop integration features not needed in containers)
 # To enable D-Bus: install dbus package and run `eval $(dbus-launch)` before Chromium
 ENV DBUS_SESSION_BUS_ADDRESS=/dev/null
+ENV DBUS_SYSTEM_BUS_ADDRESS=/dev/null
 
 # Create browser launch script
+ENV CHROME_LOG_FILE=/var/log/chromium.log
 RUN mkdir -p /root/.chrome-profile && \
     cat > /usr/local/bin/start-browser << 'BROWSEREOF'
 #!/bin/bash
 # Launch Chromium with CDP enabled for agent automation
+# Logs written to $CHROME_LOG_FILE for debugging (default: /var/log/chromium.log)
+LOG_FILE="${CHROME_LOG_FILE:-/var/log/chromium.log}"
 chromium \
   --no-sandbox \
   --disable-gpu \
   --disable-dev-shm-usage \
+  --disable-background-networking \
+  --disable-default-apps \
+  --disable-sync \
+  --no-first-run \
   --remote-debugging-port=${CHROME_CDP_PORT:-9222} \
   --remote-allow-origins=* \
   --user-data-dir=${CHROME_USER_DATA_DIR:-/root/.chrome-profile} \
   --window-size=1920,1080 \
-  "$@" &
+  "$@" >>"$LOG_FILE" 2>&1 &
 echo "Chromium started with CDP on port ${CHROME_CDP_PORT:-9222}"
-echo "Connect via: ws://localhost:${CHROME_CDP_PORT:-9222}/devtools/browser"
+echo "Logs: $LOG_FILE"
 BROWSEREOF
 RUN chmod +x /usr/local/bin/start-browser
 
@@ -215,7 +223,7 @@ RUN cat > /entrypoint.sh << 'EOF'
 if [ "$ENABLE_BROWSER" = "1" ]; then
   if ! pgrep -x "Xvfb" > /dev/null; then
     echo "✓ Starting Xvfb on display :99"
-    Xvfb :99 -screen 0 1920x1080x24 &
+    Xvfb :99 -screen 0 1920x1080x24 >>/var/log/xvfb.log 2>&1 &
     sleep 1
   fi
 
