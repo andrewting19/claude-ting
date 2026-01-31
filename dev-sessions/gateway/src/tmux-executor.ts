@@ -89,11 +89,13 @@ export class TmuxExecutor {
 
   /**
    * Checks if an AI CLI (Claude or Codex) is running in a tmux session
-   * Returns true if claude, codex, or docker (running either) is found
+   * Returns true if claude, codex, or docker (running ubuntu-dev) is found
+   * Uses ps -f for full command line to properly match dockerized sessions
    */
   async isCliRunning(tmuxSessionName: string): Promise<boolean> {
     try {
-      const command = `tmux list-panes -t ${tmuxSessionName} -F '#{pane_tty}' | xargs -I {} ps -t {} | grep -E '(claude|codex|docker.*ubuntu-dev)'`;
+      // Use ps -f for full command line, match claude/codex directly or docker running ubuntu-dev
+      const command = `tmux list-panes -t ${tmuxSessionName} -F '#{pane_tty}' | xargs -I {} ps -t {} -f | grep -E '(claude|codex|docker.*ubuntu-dev|docker run.*ubuntu-dev)'`;
 
       const output = await this.execSSH(command);
       return output.trim().length > 0;
