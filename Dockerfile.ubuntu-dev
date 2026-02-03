@@ -273,14 +273,15 @@ fi
 
 # Ensure dev-sessions MCP is configured in ~/.claude.json
 if [ -f "/root/.claude.json" ]; then
-  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" \
+  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" --arg hostpath "${HOST_PATH:-}" \
      '.mcpServers = (.mcpServers // {}) |
       .mcpServers["dev-sessions"] = {
         "type": "stdio",
         "command": "dev-sessions-mcp",
         "args": [],
         "env": {
-          "GATEWAY_URL": $gateway
+          "GATEWAY_URL": $gateway,
+          "HOST_PATH": $hostpath
         }
       }' \
      /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
@@ -303,29 +304,26 @@ fi
 # Ensure MCP configuration exists (gets overwritten by mount)
 if [ ! -f "/root/.claude/config.json" ]; then
   echo "✓ Creating MCP configuration"
-  cat > /root/.claude/config.json << 'MCPEOF'
+  cat > /root/.claude/config.json << MCPEOF
 {
   "mcpServers": {
     "dev-sessions": {
       "command": "dev-sessions-mcp",
       "env": {
-        "GATEWAY_URL": "http://host.docker.internal:6767"
+        "GATEWAY_URL": "$DEV_SESSIONS_GATEWAY_URL",
+        "HOST_PATH": "${HOST_PATH:-}"
       }
     }
   }
 }
 MCPEOF
 else
-  # MCP config exists, ensure dev-sessions is configured
-  if ! grep -q "dev-sessions" /root/.claude/config.json 2>/dev/null; then
-    echo "✓ Adding dev-sessions MCP to existing config"
-    # Merge dev-sessions into existing mcpServers
-    jq '.mcpServers["dev-sessions"] = {"command": "dev-sessions-mcp", "env": {"GATEWAY_URL": "http://host.docker.internal:6767"}}' \
-      /root/.claude/config.json > /root/.claude/config.json.tmp && \
-      mv /root/.claude/config.json.tmp /root/.claude/config.json
-  else
-    echo "✓ MCP configuration already present"
-  fi
+  # MCP config exists, ensure dev-sessions is configured with HOST_PATH
+  echo "✓ Updating dev-sessions MCP in existing config"
+  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" --arg hostpath "${HOST_PATH:-}" \
+    '.mcpServers["dev-sessions"] = {"command": "dev-sessions-mcp", "env": {"GATEWAY_URL": $gateway, "HOST_PATH": $hostpath}}' \
+    /root/.claude/config.json > /root/.claude/config.json.tmp && \
+    mv /root/.claude/config.json.tmp /root/.claude/config.json
 fi
 
 # Add Playwright MCP to config.json if browser is enabled
@@ -357,30 +355,31 @@ ln -snf "$ORIG_CODEX_HOME/sessions" "$SHADOW_CODEX_HOME/sessions"
 
 export CODEX_HOME="$SHADOW_CODEX_HOME"
 CODEX_CONFIG="$CODEX_HOME/config.toml"
+export CODEX_CONFIG
 
 if [ ! -f "$CODEX_CONFIG" ]; then
   cat > "$CODEX_CONFIG" << CODEXEOF
 tool_output_token_limit = 25000
-
-[features]
-web_search_request = true
-view_image_tool = true
+web_search = "live"
 
 [mcp_servers."dev-sessions"]
 command = "dev-sessions-mcp"
 
 [mcp_servers."dev-sessions".env]
 GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
+HOST_PATH = "${HOST_PATH:-}"
 CODEXEOF
   echo "✓ Created Codex config with dev-sessions MCP entry (shadow copy)"
 else
-  # Ensure dev-sessions gateway URL is correct inside the shadow copy
+  # Ensure dev-sessions config is correct inside the shadow copy
   export DEV_GATEWAY="$DEV_SESSIONS_GATEWAY_URL"
+  export DEV_HOST_PATH="${HOST_PATH:-}"
   python - <<'PY'
 import os, re, pathlib
 
 config_path = os.environ["CODEX_CONFIG"]
 gateway = os.environ["DEV_GATEWAY"]
+host_path = os.environ.get("DEV_HOST_PATH", "")
 
 text = pathlib.Path(config_path).read_text(encoding="utf-8")
 
@@ -388,21 +387,27 @@ if '[mcp_servers."dev-sessions"]' not in text:
     text += f'\n[mcp_servers."dev-sessions"]\ncommand = "dev-sessions-mcp"\n'
 
 if '[mcp_servers."dev-sessions".env]' not in text:
-    text += f'\n[mcp_servers."dev-sessions".env]\nGATEWAY_URL = "{gateway}"\n'
+    text += f'\n[mcp_servers."dev-sessions".env]\nGATEWAY_URL = "{gateway}"\nHOST_PATH = "{host_path}"\n'
 else:
     pattern = r'(\[mcp_servers\."dev-sessions"\.env\][^\[]*)'
     def repl(match):
         block = match.group(1)
+        # Update or add GATEWAY_URL
         if "GATEWAY_URL" in block:
             block = re.sub(r'GATEWAY_URL\s*=.*', f'GATEWAY_URL = "{gateway}"', block)
         else:
             block = block.rstrip() + f'\nGATEWAY_URL = "{gateway}"\n'
+        # Update or add HOST_PATH
+        if "HOST_PATH" in block:
+            block = re.sub(r'HOST_PATH\s*=.*', f'HOST_PATH = "{host_path}"', block)
+        else:
+            block = block.rstrip() + f'\nHOST_PATH = "{host_path}"\n'
         return block
     text = re.sub(pattern, repl, text, count=1, flags=re.S)
 
 pathlib.Path(config_path).write_text(text, encoding="utf-8")
 PY
-  echo "✓ Updated dev-sessions gateway URL in Codex config shadow copy"
+  echo "✓ Updated dev-sessions config in Codex config shadow copy"
 fi
 
 # Execute the command
