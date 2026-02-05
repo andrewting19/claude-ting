@@ -289,7 +289,7 @@ if [ -f "/root/.claude.json" ]; then
 
   # Add Playwright MCP if browser is enabled
   if [ "$ENABLE_BROWSER" = "1" ]; then
-    jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
+    jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
        '.mcpServers["playwright"] = {
           "type": "stdio",
           "command": "npx",
@@ -328,7 +328,7 @@ fi
 
 # Add Playwright MCP to config.json if browser is enabled
 if [ "$ENABLE_BROWSER" = "1" ] && [ -f "/root/.claude/config.json" ]; then
-  jq --arg cdp "ws://localhost:${CHROME_CDP_PORT:-9222}" \
+  jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
      '.mcpServers["playwright"] = {
         "command": "npx",
         "args": ["@playwright/mcp", "--cdp-endpoint", $cdp]
@@ -340,18 +340,48 @@ fi
 
 # Prepare Codex config in a shadow copy to avoid modifying host ~/.codex
 ORIG_CODEX_HOME="${CODEX_HOME:-/root/.codex}"
-SHADOW_CODEX_HOME="/tmp/codex-home"
+# Keep this out of /tmp so Codex can install helper binaries without warnings.
+SHADOW_CODEX_HOME="/root/.codex-shadow"
 mkdir -p "$SHADOW_CODEX_HOME"
-# Copy existing files for baseline
+# Copy existing files for baseline (exclude history/sessions to avoid bind-mount conflicts)
 if [ -d "$ORIG_CODEX_HOME" ] && [ "$(ls -A "$ORIG_CODEX_HOME" 2>/dev/null)" ]; then
-  cp -a "$ORIG_CODEX_HOME"/. "$SHADOW_CODEX_HOME"/
+  shopt -s dotglob nullglob
+  for item in "$ORIG_CODEX_HOME"/*; do
+    base="$(basename "$item")"
+    if [ "$base" = "history.jsonl" ] || [ "$base" = "sessions" ]; then
+      continue
+    fi
+    cp -a "$item" "$SHADOW_CODEX_HOME"/
+  done
+  shopt -u dotglob nullglob
 fi
-# Keep history and sessions persisted on host; symlink them into the shadow copy
+# Keep history and sessions persisted on host; symlink them into the shadow copy unless bind-mounted
 mkdir -p "$ORIG_CODEX_HOME"
 touch "$ORIG_CODEX_HOME/history.jsonl"
 mkdir -p "$ORIG_CODEX_HOME/sessions"
-ln -sf "$ORIG_CODEX_HOME/history.jsonl" "$SHADOW_CODEX_HOME/history.jsonl"
-ln -snf "$ORIG_CODEX_HOME/sessions" "$SHADOW_CODEX_HOME/sessions"
+
+is_mountpoint() {
+  local target="$1"
+  if command -v findmnt >/dev/null 2>&1; then
+    local mp
+    mp="$(findmnt -T "$target" -no TARGET 2>/dev/null || true)"
+    [ "$mp" = "$target" ]
+    return $?
+  fi
+  return 1
+}
+
+if is_mountpoint "$SHADOW_CODEX_HOME/history.jsonl"; then
+  echo "✓ history.jsonl is bind-mounted; leaving as-is"
+else
+  ln -sf "$ORIG_CODEX_HOME/history.jsonl" "$SHADOW_CODEX_HOME/history.jsonl"
+fi
+
+if is_mountpoint "$SHADOW_CODEX_HOME/sessions"; then
+  echo "✓ sessions is bind-mounted; leaving as-is"
+else
+  ln -snf "$ORIG_CODEX_HOME/sessions" "$SHADOW_CODEX_HOME/sessions"
+fi
 
 export CODEX_HOME="$SHADOW_CODEX_HOME"
 CODEX_CONFIG="$CODEX_HOME/config.toml"

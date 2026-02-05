@@ -90,8 +90,19 @@ codex-docker() {
             ;;
     esac
 
-    # Create ~/.codex directory if it doesn't exist
+    # Ensure host Codex state exists (created by running native Codex at least once)
     /bin/mkdir -p "$HOME/.codex"
+    local codex_host_home="$HOME/.codex"
+    local codex_history="$codex_host_home/history.jsonl"
+    local codex_sessions="$codex_host_home/sessions"
+    if [ ! -f "$codex_history" ] || [ ! -d "$codex_sessions" ]; then
+        echo "codexed error: expected host Codex history/sessions to exist."
+        echo "Missing:"
+        [ ! -f "$codex_history" ] && echo "  $codex_history"
+        [ ! -d "$codex_sessions" ] && echo "  $codex_sessions/"
+        echo "Run native Codex once on the host to create these, then retry."
+        return 1
+    fi
 
     local docker_cmd="/usr/local/bin/docker run -it --rm"
 
@@ -105,6 +116,9 @@ codex-docker() {
     docker_cmd="$docker_cmd -w /workspace"
     docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
     docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
+    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
+    docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
+    docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
 
     if [ -n "$docker_extra_args" ]; then
         docker_cmd="$docker_cmd $docker_extra_args"
