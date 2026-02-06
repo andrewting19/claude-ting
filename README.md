@@ -131,6 +131,7 @@ Docker Container (ubuntu-dev)
    - Project directory → `/workspace` (working directory)
    - Neovim config → `/root/.local/share/nvim` (shared editor data)
    - Claude config → `~/.claude` directory (OAuth persistence)
+   - Claude per-project state (auto-memory, etc.) → maps host `~/.claude/projects/<sanitized-cwd>/` into Docker's `~/.claude/projects/-workspace/` to avoid cross-project collisions
    - Host OAuth credentials → `/root/.claude.host.json` (read-only merge source)
    - Codex config → `~/.codex` directory (contains `auth.json`, `config.toml`, prompts, etc.)
 

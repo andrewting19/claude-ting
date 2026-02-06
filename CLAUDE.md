@@ -13,6 +13,7 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
  - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
   - Mount the target project to `/workspace` and set it as `-w`.
   - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
+  - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
   - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
   - Pass `HOST_PATH` (for dev-sessions MCP) and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
 - `dev-sessions/`: Gateway + MCP client for handoff workflows. Bootstrap via `dev-sessions/scripts/bootstrap-dev-sessions.sh`; sample MCP config in `sample-mcp-config.json`.

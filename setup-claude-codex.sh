@@ -21,9 +21,20 @@ claude-docker() {
     if [[ "$path" != /* ]]; then
         path="$(pwd)/$path"
     fi
+    # Canonicalize so per-project Claude state matches native runs (no ".." segments).
+    if [[ -d "$path" ]]; then
+        path="$(cd "$path" && pwd -P)"
+    fi
 
     # Create ~/.claude directory if it doesn't exist
     /bin/mkdir -p "$HOME/.claude"
+    # Ensure per-project Claude state (including auto-memory) does not collide in Docker.
+    # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
+    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
+    local sanitized_cwd
+    sanitized_cwd="$(printf '%s' "$path" | sed -E 's/[^A-Za-z0-9]/-/g')"
+    local host_project_state_dir="$HOME/.claude/projects/${sanitized_cwd}"
+    /bin/mkdir -p "$host_project_state_dir"
 
     # Build docker command with optional mounts
     local docker_cmd="/usr/local/bin/docker run -it --rm"
@@ -42,6 +53,8 @@ claude-docker() {
     docker_cmd="$docker_cmd -w /workspace"
     docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
     docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
+    # Map Docker's /workspace project-state dir to the host's project-specific state dir.
+    docker_cmd="$docker_cmd -v \"$host_project_state_dir:/root/.claude/projects/-workspace\""
 
     # Mount .claude.json as .claude.host.json for OAuth credential merging
     if [ -f "$HOME/.claude.json" ]; then
