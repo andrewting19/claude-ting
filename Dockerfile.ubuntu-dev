@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y \
     pulseaudio-utils \
     alsa-utils \
     sox \
+    # PostgreSQL client (psql)
+    postgresql-client \
     # GitHub CLI
     gh \
     # Browser automation (virtual display) - chromium installed separately via PPA
@@ -438,6 +440,11 @@ else:
 pathlib.Path(config_path).write_text(text, encoding="utf-8")
 PY
   echo "✓ Updated dev-sessions config in Codex config shadow copy"
+fi
+
+# Configure gh as git credential helper if gh config is mounted
+if [ -d "/root/.config/gh" ] && command -v gh >/dev/null 2>&1; then
+  gh auth setup-git 2>/dev/null && echo "✓ Configured gh as git credential helper"
 fi
 
 # Execute the command

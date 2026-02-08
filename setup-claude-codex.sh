@@ -32,7 +32,7 @@ claude-docker() {
     # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
     # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
     local sanitized_cwd
-    sanitized_cwd="$(printf '%s' "$path" | sed -E 's/[^A-Za-z0-9]/-/g')"
+    sanitized_cwd="${path//[^A-Za-z0-9]/-}"
     local host_project_state_dir="$HOME/.claude/projects/${sanitized_cwd}"
     /bin/mkdir -p "$host_project_state_dir"
 
@@ -59,6 +59,11 @@ claude-docker() {
     # Mount .claude.json as .claude.host.json for OAuth credential merging
     if [ -f "$HOME/.claude.json" ]; then
         docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.host.json:ro\""
+    fi
+
+    # Mount gh CLI config for git credential auth (push/pull/clone)
+    if [ -d "$HOME/.config/gh" ]; then
+        docker_cmd="$docker_cmd -v \"$HOME/.config/gh:/root/.config/gh:ro\""
     fi
 
     # Add extra args if provided
@@ -129,6 +134,10 @@ codex-docker() {
     docker_cmd="$docker_cmd -w /workspace"
     docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
     docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
+    # Mount gh CLI config for git credential auth (push/pull/clone)
+    if [ -d "$HOME/.config/gh" ]; then
+        docker_cmd="$docker_cmd -v \"$HOME/.config/gh:/root/.config/gh:ro\""
+    fi
     # Persist transcripts to host ~/.codex via bind mounts into the shadow home
     docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
     docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
