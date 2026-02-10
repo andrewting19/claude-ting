@@ -442,9 +442,13 @@ PY
   echo "✓ Updated dev-sessions config in Codex config shadow copy"
 fi
 
-# Configure gh as git credential helper if gh config is mounted
-if [ -d "/root/.config/gh" ] && command -v gh >/dev/null 2>&1; then
-  gh auth setup-git 2>/dev/null && echo "✓ Configured gh as git credential helper"
+# Configure gh as git credential helper if gh is available and we have any auth source.
+# Note: on macOS the host token typically lives in Keychain, so helpers may forward GH_TOKEN
+# into the container instead of relying on a mounted ~/.config/gh/hosts.yml token.
+if command -v gh >/dev/null 2>&1; then
+  if [ -n "$GH_TOKEN" ] || [ -n "$GITHUB_TOKEN" ] || [ -d "/root/.config/gh" ]; then
+    gh auth setup-git 2>/dev/null && echo "✓ Configured gh as git credential helper"
+  fi
 fi
 
 # Execute the command

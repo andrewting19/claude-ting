@@ -14,27 +14,28 @@ cat << 'EOF'
 Add this function to your ~/.zshrc:
 
 claude-docker() {
-    local path="${1:-.}"
-    local extra_args="${2}"
+	    # Note: in zsh, `path` is a special array tied to $PATH. Don't use it as a local var name.
+	    local workspace_path="${1:-.}"
+	    local extra_args="${2}"
 
-    # Convert relative path to absolute
-    if [[ "$path" != /* ]]; then
-        path="$(pwd)/$path"
-    fi
-    # Canonicalize so per-project Claude state matches native runs (no ".." segments).
-    if [[ -d "$path" ]]; then
-        path="$(cd "$path" && pwd -P)"
-    fi
+	    # Convert relative path to absolute
+	    if [[ "$workspace_path" != /* ]]; then
+	        workspace_path="$(pwd)/$workspace_path"
+	    fi
+	    # Canonicalize so per-project Claude state matches native runs (no ".." segments).
+	    if [[ -d "$workspace_path" ]]; then
+	        workspace_path="$(cd "$workspace_path" && pwd -P)"
+	    fi
 
-    # Create ~/.claude directory if it doesn't exist
-    /bin/mkdir -p "$HOME/.claude"
+	    # Create ~/.claude directory if it doesn't exist
+	    /bin/mkdir -p "$HOME/.claude"
     # Ensure per-project Claude state (including auto-memory) does not collide in Docker.
     # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
-    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
-    local sanitized_cwd
-    sanitized_cwd="${path//[^A-Za-z0-9]/-}"
-    local host_project_state_dir="$HOME/.claude/projects/${sanitized_cwd}"
-    /bin/mkdir -p "$host_project_state_dir"
+	    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
+	    local sanitized_cwd
+	    sanitized_cwd="${workspace_path//[^A-Za-z0-9]/-}"
+	    local host_project_state_dir="$HOME/.claude/projects/${sanitized_cwd}"
+	    /bin/mkdir -p "$host_project_state_dir"
 
     # Build docker command with optional mounts
     local docker_cmd="/usr/local/bin/docker run -it --rm"
@@ -42,41 +43,65 @@ claude-docker() {
     # Pass through API key if set (optional, OAuth is preferred)
     if [ -n "$ANTHROPIC_API_KEY" ]; then
         docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
-    fi
+	    fi
 
-    # Pass host workspace path for dev-sessions MCP
-    docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
-    # Point PostgreSQL to host
-    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
+	    # Pass host workspace path for dev-sessions MCP
+	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Point PostgreSQL to host
+	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
 
-    docker_cmd="$docker_cmd -v \"$path:/workspace\""
-    docker_cmd="$docker_cmd -w /workspace"
-    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
-    docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
+	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
+	    docker_cmd="$docker_cmd -w /workspace"
+	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
+	    docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
     # Map Docker's /workspace project-state dir to the host's project-specific state dir.
     docker_cmd="$docker_cmd -v \"$host_project_state_dir:/root/.claude/projects/-workspace\""
 
     # Mount .claude.json as .claude.host.json for OAuth credential merging
-    if [ -f "$HOME/.claude.json" ]; then
-        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.host.json:ro\""
+	    if [ -f "$HOME/.claude.json" ]; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.host.json:ro\""
+	    fi
+
+	    # Mount gh CLI config.
+	    # On macOS, hosts.yml commonly does NOT contain an oauth_token (it lives in Keychain),
+	    # and mounting such a hosts.yml into Linux makes `gh auth status` report an invalid
+	    # "default" token. Mount config.yml always, and only mount hosts.yml if it has a token.
+	    if [ -f "$HOME/.config/gh/config.yml" ]; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro\""
+	    fi
+	    if [ -f "$HOME/.config/gh/hosts.yml" ] && grep -q "oauth_token:" "$HOME/.config/gh/hosts.yml" 2>/dev/null; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro\""
+	    fi
+
+	    # Forward GitHub auth into the container.
+	    # On macOS, gh stores the token in the system keychain (not in ~/.config/gh/hosts.yml),
+	    # so mounting ~/.config/gh alone does not authenticate gh inside a Linux container.
+	    # Important: avoid embedding the token into the docker command string (ps/history); use env export.
+	    local gh_token_env=""
+	    if [ -n "$GH_TOKEN" ]; then
+	        gh_token_env="$GH_TOKEN"
+	    elif command -v gh >/dev/null 2>&1; then
+	        gh_token_env="$(gh auth token 2>/dev/null || true)"
+	    fi
+	    if [ -n "$gh_token_env" ]; then
+	        docker_cmd="$docker_cmd -e GH_TOKEN"
+	    fi
+
+	    # Add extra args if provided
+	    if [ -n "$extra_args" ]; then
+	        docker_cmd="$docker_cmd $extra_args"
     fi
 
-    # Mount gh CLI config for git credential auth (push/pull/clone)
-    if [ -d "$HOME/.config/gh" ]; then
-        docker_cmd="$docker_cmd -v \"$HOME/.config/gh:/root/.config/gh:ro\""
-    fi
+	    # Expose CDP port for browser automation (optional, use -p 9222:9222 in extra_args)
+	    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions"
 
-    # Add extra args if provided
-    if [ -n "$extra_args" ]; then
-        docker_cmd="$docker_cmd $extra_args"
-    fi
-
-    # Expose CDP port for browser automation (optional, use -p 9222:9222 in extra_args)
-    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions"
-
-    # Execute the command
-    eval $docker_cmd
-}
+	    # Execute the command
+	    if [ -n "$gh_token_env" ]; then
+	        ( export GH_TOKEN="$gh_token_env"; eval $docker_cmd )
+	    else
+	        eval $docker_cmd
+	    fi
+	}
 
 # Alias for easier access
 alias clauded='claude-docker'
@@ -87,9 +112,10 @@ claudedb() {
 }
 
 codex-docker() {
-    local path="$(pwd)"
-    local docker_extra_args=""
-    local codex_args=""
+	    # Note: in zsh, `path` is a special array tied to $PATH. Don't use it as a local var name.
+	    local workspace_path="$(pwd)"
+	    local docker_extra_args=""
+	    local codex_args=""
 
     # Check if first arg is a codex subcommand
     case "$1" in
@@ -97,15 +123,15 @@ codex-docker() {
             # Pass all args to codex
             codex_args="$@"
             ;;
-        *)
-            # First arg is a path (or default to current dir)
-            path="${1:-.}"
-            if [[ "$path" != /* ]]; then
-                path="$(pwd)/$path"
-            fi
-            # Second arg is docker extra args
-            docker_extra_args="${2}"
-            ;;
+	        *)
+	            # First arg is a path (or default to current dir)
+	            workspace_path="${1:-.}"
+	            if [[ "$workspace_path" != /* ]]; then
+	                workspace_path="$(pwd)/$workspace_path"
+	            fi
+	            # Second arg is docker extra args
+	            docker_extra_args="${2}"
+	            ;;
     esac
 
     # Ensure host Codex state exists (created by running native Codex at least once)
@@ -122,25 +148,44 @@ codex-docker() {
         return 1
     fi
 
-    local docker_cmd="/usr/local/bin/docker run -it --rm"
+	    local docker_cmd="/usr/local/bin/docker run -it --rm"
 
-    docker_cmd="$docker_cmd -e HOST_PATH=\"$path\""
-    # Point PostgreSQL to host
-    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
-    # Ensure MCP inside container points to host gateway
-    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
-    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
-    docker_cmd="$docker_cmd -v \"$path:/workspace\""
-    docker_cmd="$docker_cmd -w /workspace"
-    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
-    docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
-    # Mount gh CLI config for git credential auth (push/pull/clone)
-    if [ -d "$HOME/.config/gh" ]; then
-        docker_cmd="$docker_cmd -v \"$HOME/.config/gh:/root/.config/gh:ro\""
-    fi
-    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
-    docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
-    docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
+	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Point PostgreSQL to host
+	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
+	    # Ensure MCP inside container points to host gateway
+	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
+	    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
+	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
+	    docker_cmd="$docker_cmd -w /workspace"
+	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
+	    docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
+	    # Mount gh CLI config.
+	    # On macOS, hosts.yml commonly does NOT contain an oauth_token (it lives in Keychain),
+	    # and mounting such a hosts.yml into Linux makes `gh auth status` report an invalid
+	    # "default" token. Mount config.yml always, and only mount hosts.yml if it has a token.
+	    if [ -f "$HOME/.config/gh/config.yml" ]; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro\""
+	    fi
+	    if [ -f "$HOME/.config/gh/hosts.yml" ] && grep -q "oauth_token:" "$HOME/.config/gh/hosts.yml" 2>/dev/null; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro\""
+	    fi
+	    # Forward GitHub auth into the container.
+	    # On macOS, gh stores the token in the system keychain (not in ~/.config/gh/hosts.yml),
+	    # so mounting ~/.config/gh alone does not authenticate gh inside a Linux container.
+	    # Important: avoid embedding the token into the docker command string (ps/history); use env export.
+	    local gh_token_env=""
+	    if [ -n "$GH_TOKEN" ]; then
+	        gh_token_env="$GH_TOKEN"
+	    elif command -v gh >/dev/null 2>&1; then
+	        gh_token_env="$(gh auth token 2>/dev/null || true)"
+	    fi
+	    if [ -n "$gh_token_env" ]; then
+	        docker_cmd="$docker_cmd -e GH_TOKEN"
+	    fi
+	    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
+	    docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
+	    docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
 
     if [ -n "$docker_extra_args" ]; then
         docker_cmd="$docker_cmd $docker_extra_args"
@@ -148,12 +193,16 @@ codex-docker() {
 
     docker_cmd="$docker_cmd ubuntu-dev codex --dangerously-bypass-approvals-and-sandbox"
 
-    if [ -n "$codex_args" ]; then
-        docker_cmd="$docker_cmd $codex_args"
-    fi
+	    if [ -n "$codex_args" ]; then
+	        docker_cmd="$docker_cmd $codex_args"
+	    fi
 
-    eval $docker_cmd
-}
+	    if [ -n "$gh_token_env" ]; then
+	        ( export GH_TOKEN="$gh_token_env"; eval $docker_cmd )
+	    else
+	        eval $docker_cmd
+	    fi
+	}
 
 alias codexed='codex-docker'
 

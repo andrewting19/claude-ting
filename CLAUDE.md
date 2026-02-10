@@ -21,7 +21,7 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 ## Authentication Behavior
 - Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.
 - Codex: `~/.codex` is mounted; entrypoint only creates `config.toml` with the `dev-sessions` MCP if it is missing. Gateway selection happens via `DEV_SESSIONS_GATEWAY_URL` env (default `http://host.docker.internal:6767`). Login once via `codex login` (or pipe `OPENAI_API_KEY` to `codex login --with-api-key`).
-- GitHub CLI: `gh` is installed but not auto-authenticated. To enable, either mount host config (`-v "$HOME/.config/gh:/root/.config/gh:ro"`) or pass `GH_TOKEN` env var.
+- GitHub CLI: `gh` is installed but not auto-authenticated. On macOS, `gh` commonly stores the token in Keychain (not in `~/.config/gh/hosts.yml`), so mounting `~/.config/gh` alone is often insufficient. Prefer forwarding `GH_TOKEN` into the container (the helper functions do this automatically by calling `gh auth token`), or export `GH_TOKEN` yourself.
 
 ## Typical Usage
 ```bash
