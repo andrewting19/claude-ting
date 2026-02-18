@@ -239,10 +239,23 @@ if [ -z "$DEV_SESSIONS_GATEWAY_URL" ]; then
   export DEV_SESSIONS_GATEWAY_URL="http://host.docker.internal:6767"
 fi
 
+# Replace a file atomically when possible, with a bind-mount-safe fallback.
+safe_replace_file() {
+  local src="$1"
+  local dest="$2"
+  if mv "$src" "$dest" 2>/dev/null; then
+    return 0
+  fi
+  cat "$src" > "$dest" && rm -f "$src"
+}
+
 # Merge Claude OAuth config from host file if available
 if [ -f "/root/.claude.host.json" ]; then
   # Extract OAuth and user data from host config
-  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache mcpServers"
+  # NOTE: mcpServers is intentionally excluded — the entrypoint configures Docker-
+  # specific MCPs (dev-sessions, optionally playwright) below.  Merging host
+  # mcpServers would pull in host-only MCPs (e.g. playwriter) and Docker-wrong URLs.
+  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache"
 
   # Build jq expression for extraction
   JQ_EXPR=""
@@ -257,7 +270,7 @@ if [ -f "/root/.claude.host.json" ]; then
   if [ -n "$HOST_CONFIG" ] && [ "$HOST_CONFIG" != "null" ] && [ "$HOST_CONFIG" != "{}" ]; then
     if [ -f "/root/.claude.json" ]; then
       # Merge with existing container file
-      jq ". * $HOST_CONFIG" /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+      jq ". * $HOST_CONFIG" /root/.claude.json > /root/.claude.json.tmp && safe_replace_file /root/.claude.json.tmp /root/.claude.json
       echo "✓ OAuth credentials merged from host"
     else
       # Create new container file with host config
@@ -286,7 +299,7 @@ if [ -f "/root/.claude.json" ]; then
           "HOST_PATH": $hostpath
         }
       }' \
-     /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+     /root/.claude.json > /root/.claude.json.tmp && safe_replace_file /root/.claude.json.tmp /root/.claude.json
   echo "✓ Ensured dev-sessions MCP entry in ~/.claude.json"
 
   # Add Playwright MCP if browser is enabled
@@ -298,7 +311,7 @@ if [ -f "/root/.claude.json" ]; then
           "args": ["@playwright/mcp", "--cdp-endpoint", $cdp],
           "env": {}
         }' \
-       /root/.claude.json > /root/.claude.json.tmp && mv /root/.claude.json.tmp /root/.claude.json
+       /root/.claude.json > /root/.claude.json.tmp && safe_replace_file /root/.claude.json.tmp /root/.claude.json
     echo "✓ Added Playwright MCP (connecting to CDP on port ${CHROME_CDP_PORT:-9222})"
   fi
 fi
@@ -325,7 +338,7 @@ else
   jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" --arg hostpath "${HOST_PATH:-}" \
     '.mcpServers["dev-sessions"] = {"command": "dev-sessions-mcp", "env": {"GATEWAY_URL": $gateway, "HOST_PATH": $hostpath}}' \
     /root/.claude/config.json > /root/.claude/config.json.tmp && \
-    mv /root/.claude/config.json.tmp /root/.claude/config.json
+    safe_replace_file /root/.claude/config.json.tmp /root/.claude/config.json
 fi
 
 # Add Playwright MCP to config.json if browser is enabled
@@ -336,7 +349,7 @@ if [ "$ENABLE_BROWSER" = "1" ] && [ -f "/root/.claude/config.json" ]; then
         "args": ["@playwright/mcp", "--cdp-endpoint", $cdp]
       }' \
      /root/.claude/config.json > /root/.claude/config.json.tmp && \
-     mv /root/.claude/config.json.tmp /root/.claude/config.json
+     safe_replace_file /root/.claude/config.json.tmp /root/.claude/config.json
   echo "✓ Added Playwright MCP to config.json"
 fi
 

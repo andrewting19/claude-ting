@@ -17,6 +17,7 @@ claude-docker() {
 	    # Note: in zsh, `path` is a special array tied to $PATH. Don't use it as a local var name.
 	    local workspace_path="${1:-.}"
 	    local extra_args="${2}"
+	    local claude_args="${3}"
 
 	    # Convert relative path to absolute
 	    if [[ "$workspace_path" != /* ]]; then
@@ -57,6 +58,32 @@ claude-docker() {
     # Map Docker's /workspace project-state dir to the host's project-specific state dir.
     docker_cmd="$docker_cmd -v \"$host_project_state_dir:/root/.claude/projects/-workspace\""
 
+    # Start with an empty config.json for Docker. Host MCPs are excluded by default
+    # since they often don't work inside containers (wrong URLs, host-only extensions).
+    # The entrypoint adds Docker-specific MCPs (dev-sessions, optionally playwright).
+    # This overlay also prevents the entrypoint from contaminating the host's config
+    # through the ~/.claude bind mount.
+    local docker_mcp_config="$HOME/.claude/.docker-mcp-config.json"
+    echo '{}' > "$docker_mcp_config"
+
+    # Opt-in: include specific host MCPs inside Docker.
+    # Set CLAUDE_DOCKER_INCLUDE_MCPS="some-mcp,another" or list them one-per-line
+    # in ~/.claude/docker-mcp-include.
+    local include_mcps="${CLAUDE_DOCKER_INCLUDE_MCPS:-}"
+    if [ -z "$include_mcps" ] && [ -f "$HOME/.claude/docker-mcp-include" ]; then
+        include_mcps="$(paste -sd, "$HOME/.claude/docker-mcp-include")"
+    fi
+    if [ -n "$include_mcps" ] && [ -f "$HOME/.claude/config.json" ]; then
+        local jq_names
+        jq_names=$(echo "$include_mcps" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
+        jq --argjson names "$jq_names" \
+            '{mcpServers: (.mcpServers // {} | with_entries(select(.key as $k | $names | index($k))))}' \
+            "$HOME/.claude/config.json" > "$docker_mcp_config"
+    fi
+
+    # Overlay so container sees (and modifies) this instead of the host original
+    docker_cmd="$docker_cmd -v \"$docker_mcp_config:/root/.claude/config.json\""
+
     # Mount .claude.json as .claude.host.json for OAuth credential merging
 	    if [ -f "$HOME/.claude.json" ]; then
 	        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.host.json:ro\""
@@ -93,7 +120,7 @@ claude-docker() {
     fi
 
 	    # Expose CDP port for browser automation (optional, use -p 9222:9222 in extra_args)
-	    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions"
+	    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions${claude_args:+ $claude_args}"
 
 	    # Execute the command
 	    if [ -n "$gh_token_env" ]; then
@@ -103,12 +130,22 @@ claude-docker() {
 	    fi
 	}
 
-# Alias for easier access
-alias clauded='claude-docker'
+# clauded: smart wrapper so --resume etc. pass through to claude (not treated as paths)
+clauded() {
+    if [[ "${1:-}" == --* ]]; then
+        claude-docker "." "" "$*"
+    else
+        claude-docker "$@"
+    fi
+}
 
 # Browser-enabled variant
 claudedb() {
-    claude-docker "${1:-.}" "-e ENABLE_BROWSER=1 ${2}"
+    if [[ "${1:-}" == --* ]]; then
+        claude-docker "." "-e ENABLE_BROWSER=1" "$*"
+    else
+        claude-docker "${1:-.}" "-e ENABLE_BROWSER=1 ${2}" "${3}"
+    fi
 }
 
 codex-docker() {
