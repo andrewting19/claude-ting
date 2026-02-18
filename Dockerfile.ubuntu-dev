@@ -455,6 +455,24 @@ PY
   echo "✓ Updated dev-sessions config in Codex config shadow copy"
 fi
 
+# Add Playwright MCP to Codex config if browser is enabled
+if [ "$ENABLE_BROWSER" = "1" ]; then
+  python - <<'PY'
+import os, pathlib
+
+config_path = os.environ["CODEX_CONFIG"]
+cdp_port = os.environ.get("CHROME_CDP_PORT", "9222")
+cdp_url = f"http://localhost:{cdp_port}"
+
+text = pathlib.Path(config_path).read_text(encoding="utf-8")
+
+if '[mcp_servers."playwright"]' not in text:
+    text += f'\n[mcp_servers."playwright"]\ncommand = "npx"\nargs = ["@playwright/mcp", "--cdp-endpoint", "{cdp_url}"]\n'
+    pathlib.Path(config_path).write_text(text, encoding="utf-8")
+PY
+  echo "✓ Added Playwright MCP to Codex config (CDP on port ${CHROME_CDP_PORT:-9222})"
+fi
+
 # Configure gh as git credential helper if gh is available and we have any auth source.
 # Note: on macOS the host token typically lives in Keychain, so helpers may forward GH_TOKEN
 # into the container instead of relying on a mounted ~/.config/gh/hosts.yml token.

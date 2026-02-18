@@ -193,6 +193,9 @@ codex-docker() {
 	    # Ensure MCP inside container points to host gateway
 	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
+	    if [ -n "$ENABLE_BROWSER" ]; then
+	        docker_cmd="$docker_cmd -e ENABLE_BROWSER=\"$ENABLE_BROWSER\""
+	    fi
 	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
 	    docker_cmd="$docker_cmd -w /workspace"
 	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
@@ -242,6 +245,11 @@ codex-docker() {
 	}
 
 alias codexed='codex-docker'
+
+# Browser-enabled variant (mirrors claudedb)
+codexedb() {
+    ENABLE_BROWSER=1 codex-docker "$@"
+}
 
 EOF
 
