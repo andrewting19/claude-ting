@@ -44,20 +44,6 @@ Inside the container run `/login` (Claude) or `codex login` once to seed credent
 - Gateway defaults to `host.docker.internal:6767` unless `DEV_SESSIONS_GATEWAY_URL` is set.
 - See the [`dev-sessions` npm package](https://www.npmjs.com/package/dev-sessions) for full docs.
 
-## Skills (Optional)
-This repo includes custom Claude Code skills for orchestration workflows. Install them to `~/.claude/skills/` by running:
-
-```bash
-./skills/install.sh
-```
-
-Or run `./setup-claude-codex.sh` which prompts for skill installation.
-
-**Available skills:**
-- `/architect` - Strategic orchestration mode. Understand codebase deeply, plan, delegate implementation to sub-agents, verify, cleanup.
-- `/handoff` - Hand off work to a fresh dev session when context is running long. Creates a briefing and spawns a tmux session you can attach to.
-- `/dev-control` - Orchestrate another dev session in real-time via polling. Send tasks, sleep, check progress, send follow-ups.
-
 ## Browser Automation (Optional)
 Browser support is **disabled by default** to avoid token overhead from the Playwright MCP. Use `claudedb` for easy browser-enabled sessions:
 

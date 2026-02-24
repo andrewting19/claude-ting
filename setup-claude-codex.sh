@@ -280,19 +280,3 @@ echo "  claudedb . \"-p 9222:9222\"       # With external CDP access"
 echo "  # Starts Xvfb, Chromium with CDP, and adds Playwright MCP to agent config"
 echo ""
 
-# Skills installation prompt
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -d "$SCRIPT_DIR/skills" ]]; then
-    echo "---"
-    echo ""
-    read -p "Install Claude Code skills (architect, handoff, dev-control)? [y/N] " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        "$SCRIPT_DIR/skills/install.sh"
-        echo ""
-        echo "Skills installed. Available commands:"
-        echo "  /architect   - Strategic orchestration mode"
-        echo "  /handoff     - Hand off to fresh dev session"
-        echo "  /dev-control - Orchestrate dev sessions in real-time"
-    fi
-fi
