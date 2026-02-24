@@ -223,7 +223,7 @@ When browser is enabled:
 
 - `codexed` launches `codex --dangerously-bypass-approvals-and-sandbox` (alias `--yolo`) so the CLI never asks for approvals. We rely on Docker for isolation, as recommended in the [Codex security guide](https://developers.openai.com/codex/security/).
 - Codex stores credentials and config in `~/.codex`. The helper mounts your host directory at `/root/.codex`, so authenticate once via `codex login` (either locally or inside the container) and the resulting `auth.json` is reused for every run.
-- The container entrypoint creates `~/.codex/config.toml` with a `dev-sessions` MCP launcher only if it doesn't exist. Gateway is controlled at runtime via `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767`). Remove the block entirely if you do not want Codex to see the MCP server.
+- The container entrypoint creates a minimal `~/.codex/config.toml` if it doesn't exist.
 - Set `CODEX_HOME` on the host if you keep credentials elsewhere. The helper passes `CODEX_HOME=/root/.codex` inside the container so Codex always finds the mounted directory.
 
 ## 📁 Project Structure
@@ -231,7 +231,6 @@ When browser is enabled:
 ```text
 claude-ting/
 ├── Dockerfile.ubuntu-dev     # Ubuntu 24.04 + dev tools + Claude Code
-├── dev-sessions/             # Gateway, MCP client, and docs for dev handoff sessions
 ├── setup-claude-codex.sh     # Shell function and auto-setup script
 ├── README.md                 # This documentation
 └── CLAUDE.md                 # Instructions for Claude Code itself

@@ -4,23 +4,22 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 
 ## What This Repo Provides
 - Containerized workflow so both CLIs run with no approval prompts (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex), relying on Docker for isolation.
-- Ubuntu 24.04 image with pyenv Python 3.12, nvm Node 22, Bun, uv, common dev tools (git, neovim, ripgrep, fd-find, bat, jq, htop, gh), and global installs of `@anthropic-ai/claude-code`, `@openai/codex`, and `dev-sessions-mcp`.
+- Ubuntu 24.04 image with pyenv Python 3.12, nvm Node 22, Bun, uv, common dev tools (git, neovim, ripgrep, fd-find, bat, jq, htop, gh), and global installs of `@anthropic-ai/claude-code`, `@openai/codex`, and `dev-sessions`.
 - Optional browser automation via Xvfb + Chromium + Playwright MCP (enable with `ENABLE_BROWSER=1`).
-- Entry point `/entrypoint.sh` that merges host OAuth, injects MCP config, and optionally starts browser automation.
+- Entry point `/entrypoint.sh` that merges host OAuth and optionally starts browser automation.
 
 ## Key Components
-- `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1`, installs dev-sessions-mcp, and ensures `/root/.claude` and `/root/.codex` exist. Entry point auto-adds a `dev-sessions` MCP block to both `~/.claude.json` and `~/.codex/config.toml`.
+- `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1`, installs `dev-sessions` CLI, and ensures `/root/.claude` and `/root/.codex` exist.
  - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
   - Mount the target project to `/workspace` and set it as `-w`.
   - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
   - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
   - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
-  - Pass `HOST_PATH` (for dev-sessions MCP) and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
-- `dev-sessions/`: Gateway + MCP client for handoff workflows. Bootstrap via `dev-sessions/scripts/bootstrap-dev-sessions.sh`; sample MCP config in `sample-mcp-config.json`.
+  - Pass `HOST_PATH` and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
 
 ## Authentication Behavior
 - Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.
-- Codex: `~/.codex` is mounted; entrypoint only creates `config.toml` with the `dev-sessions` MCP if it is missing. Gateway selection happens via `DEV_SESSIONS_GATEWAY_URL` env (default `http://host.docker.internal:6767`). Login once via `codex login` (or pipe `OPENAI_API_KEY` to `codex login --with-api-key`).
+- Codex: `~/.codex` is mounted; entrypoint creates a minimal `config.toml` if missing. Login once via `codex login` (or pipe `OPENAI_API_KEY` to `codex login --with-api-key`).
 - GitHub CLI: `gh` is installed but not auto-authenticated. On macOS, `gh` commonly stores the token in Keychain (not in `~/.config/gh/hosts.yml`), so mounting `~/.config/gh` alone is often insufficient. Prefer forwarding `GH_TOKEN` into the container (the helper functions do this automatically by calling `gh auth token`), or export `GH_TOKEN` yourself.
 
 ## Typical Usage
@@ -39,11 +38,11 @@ codexed /path/to/proj "-p 5173:5173 -e NODE_ENV=development"
 ```
 Inside the container run `/login` (Claude) or `codex login` once to seed credentials.
 
-## Dev-Sessions MCP Expectations
-- `dev-sessions-mcp` is available in the image and auto-registered in both CLI configs.
+## Dev Sessions
+- `dev-sessions` CLI is installed globally in the image.
+- The gateway runs on the host as a system daemon — install with `dev-sessions gateway install`.
 - Gateway defaults to `host.docker.internal:6767` unless `DEV_SESSIONS_GATEWAY_URL` is set.
-- `HOST_PATH` from the helper functions gives the MCP the correct workspace path.
-- See `dev-sessions/README.md` for gateway details and tmux-based handoff flow.
+- See the [`dev-sessions` npm package](https://www.npmjs.com/package/dev-sessions) for full docs.
 
 ## Skills (Optional)
 This repo includes custom Claude Code skills for orchestration workflows. Install them to `~/.claude/skills/` by running:

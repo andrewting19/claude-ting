@@ -29,7 +29,7 @@ Hand off work to a fresh dev session when context is running long. Instead of co
 - Spawns a new dev session via the dev-sessions MCP
 - The new agent reads the code, presents its understanding, and waits for you to attach and say "continue"
 
-Requires: dev-sessions MCP running (see `dev-sessions/README.md`)
+Requires: `dev-sessions` CLI installed and gateway running (see `dev-sessions gateway install`)
 
 ### `/dev-control`
 
