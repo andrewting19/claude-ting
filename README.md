@@ -63,6 +63,23 @@ Codex launches with `--dangerously-bypass-approvals-and-sandbox` inside the same
 - **Claude account** for Claude CLI authentication
 - **ChatGPT plan with Codex access** (Plus, Pro, Business, Edu, Enterprise) for the Codex CLI
 
+### Host Setup (one-time)
+
+Before using `clauded` or `codexed`, run these once on your Mac:
+
+```bash
+# Install dev-sessions globally
+npm install -g dev-sessions
+
+# Install the gateway as a system daemon (auto-starts on login)
+dev-sessions gateway install
+
+# Install skills for Claude and Codex
+dev-sessions install-skill --global
+```
+
+> **macOS**: After running `gateway install`, it prints the path to the node binary. Grant that binary **Full Disk Access** in System Settings → Privacy & Security → Full Disk Access. This lets the gateway read Claude transcripts from `~/.claude/`.
+
 ### Installation (2 minutes)
 
 1. **Clone and build**:
@@ -222,10 +239,10 @@ claude-ting/
 
 ## 🤖 Dev Sessions (Multi-Agent Handoff)
 
-The `dev-sessions/` directory contains an MCP-based system that lets Claude spawn and communicate with other Claude instances via tmux. This enables task delegation and parallel development workflows—one Claude can hand off work to another and monitor its progress.
+Claude and Codex containers have built-in support for spawning and communicating with other agent sessions via the [`dev-sessions`](https://www.npmjs.com/package/dev-sessions) CLI. This enables task delegation and parallel development workflows — one Claude can hand off work to another and monitor its progress.
 
 **What it does:**
-- Create new Claude Code sessions from within an existing session
+- Create new Claude Code or Codex sessions from within an existing session
 - Send context/instructions to spawned sessions
 - Read output from other sessions to monitor progress
 - Automatic session tracking and cleanup
@@ -233,10 +250,10 @@ The `dev-sessions/` directory contains an MCP-based system that lets Claude spaw
 **Quick example:**
 ```
 User: "Hand off the auth implementation to another Claude"
-Claude: [creates dev session, sends context, returns tmux attach command]
+Claude: [uses /dev-sessions skill to create a session, sends context, returns tmux attach command]
 ```
 
-See [`dev-sessions/README.md`](dev-sessions/README.md) for full setup instructions and usage details.
+The gateway daemon runs on your host machine and handles routing between containers and sessions. See [Host Setup](#host-setup-one-time) above to get it running.
 
 ## 🔧 Technical Details
 

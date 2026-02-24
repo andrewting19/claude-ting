@@ -183,13 +183,13 @@ The session is created in the same workspace directory as your current session.`
         },
         mode: {
           type: 'string',
-          enum: ['docker', 'native'],
-          description: 'Run mode: "docker" (default) uses clauded/codexed Docker wrappers, "native" runs claude/codex directly on the host',
+          enum: ['docker', 'native', 'native-yolo'],
+          description: 'Run mode: "docker" (default) uses clauded/codexed Docker wrappers, "native" runs claude/codex directly on the host, "native-yolo" runs claude/codex directly with --dangerously-skip-permissions / --dangerously-bypass-approvals-and-sandbox flags',
         },
       },
       required: [],
     },
-    keywords: ['create', 'spawn', 'new', 'session', 'delegate', 'handoff', 'parallel', 'developer', 'tmux', 'docker', 'native'],
+    keywords: ['create', 'spawn', 'new', 'session', 'delegate', 'handoff', 'parallel', 'developer', 'tmux', 'docker', 'native', 'yolo', 'bypass', 'skip-permissions'],
   },
   {
     name: 'list_dev_sessions',

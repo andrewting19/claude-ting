@@ -1,44 +1,55 @@
-# Quick Start - Dev Sessions
+# Quick Start
 
-Bring up the Claude handoff system in just a few minutes.
+Get Claude and Codex running in Docker containers in just a few minutes.
 
-## 1. Bootstrap Everything (≈3 minutes)
+## Host Setup (one-time, on your Mac)
+
+Before using `clauded` or `codexed`, run these once on your host machine:
+
+```bash
+# Install dev-sessions globally
+npm install -g dev-sessions
+
+# Install the gateway as a system daemon (auto-starts on login)
+dev-sessions gateway install
+
+# Install skills for Claude and Codex
+dev-sessions install-skill --global
+```
+
+> **macOS**: After running `gateway install`, it will print the path to the node binary. Grant that binary **Full Disk Access** in System Settings → Privacy & Security → Full Disk Access. This lets the gateway read Claude transcripts from `~/.claude/`.
+
+## 1. Build the Docker Image (≈3 minutes)
 
 ```bash
 cd /Users/andrew/Documents/git_repos/claude-ting
-./dev-sessions/scripts/bootstrap-dev-sessions.sh
+docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
 ```
 
-What this does:
-- Enables SSH + provisions the `~/.ssh/claude_gateway` key (macOS)
-- Creates `dev-sessions/gateway/.env` with your paths
-- Builds & launches the gateway via Docker Compose
-- Builds + globally links the MCP client (`dev-sessions-mcp`)
-- Ensures `~/.claude/config.json` references the dev-sessions MCP
+## 2. Add Shell Functions
 
-Flags:
-- `--skip-ssh-setup` (if you've already run it once)
-- `--skip-gateway` or `--skip-mcp` to run individual pieces
+```bash
+# Add to your ~/.zshrc (or run the setup script)
+source setup-claude-codex.sh
+```
 
-Re-run the script any time; it is idempotent.
-
-## 2. Smoke Test
+## 3. Smoke Test
 
 ```bash
 # Start Claude in this repo (or any workspace)
 clauded .
 ```
 
-Inside Claude, ask:
+Inside Claude, try delegating a task:
 
 ```
-Please use the create_dev_session tool to start a new session.
+Please use the /dev-sessions skill to start a new session and hand off a task.
 ```
 
-You should see a response similar to:
+You should see a response like:
 ```
 ✓ Created dev session: riven-jg
-Workspace: /Users/andrew/Documents/git_repos/claude-ting
+Workspace: /path/to/your/project
 ```
 
 Attach from another terminal:
@@ -52,61 +63,25 @@ You now have a second Claude running with the delegated context.
 ## Common Commands
 
 ```bash
-# Check gateway status/logs
-cd dev-sessions/gateway
-docker compose ps
-docker compose logs -f
+# List active dev sessions
+dev-sessions list
 
-# Restart gateway
-docker compose restart
+# Check gateway status
+dev-sessions gateway status
 
-# Stop / start later
-docker compose stop
-docker compose start
-
-# Legacy docker commands still work because the container is named dev-sessions-gateway
-docker logs -f dev-sessions-gateway
-docker start dev-sessions-gateway
-docker stop dev-sessions-gateway
+# Kill a session
+dev-sessions kill riven-jg
 ```
-
-```bash
-# List dev sessions on the host
-tmux ls
-
-# Kill a particular session
-tmux kill-session -t dev-riven-jg
-```
-
-## Manual Steps (If You Prefer)
-
-1. `./dev-sessions/scripts/setup-gateway-ssh.sh`
-2. `cp dev-sessions/gateway/.env.example dev-sessions/gateway/.env` (edit values)
-3. `cd dev-sessions/gateway && docker compose up -d --build`
-4. `cd dev-sessions/mcp && npm install && npm run build && npm link`
-5. `docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .`
 
 ## Troubleshooting
 
-```bash
-# Gateway isn’t healthy
-cd dev-sessions/gateway
-docker compose logs -f
-
-# SSH fails
-ssh -i ~/.ssh/claude_gateway localhost "echo test"
-
-# Re-run the helper
-./dev-sessions/scripts/setup-gateway-ssh.sh
-
-# MCP binary missing inside Docker
-docker run -it --rm ubuntu-dev which dev-sessions-mcp
-```
+| Problem | Solution |
+|---------|----------|
+| **Gateway unreachable** | Run `dev-sessions gateway status`; if not running, `dev-sessions gateway install` |
+| **Full Disk Access** | macOS only — grant the node binary FDA in System Settings → Privacy & Security |
+| **Auth failed** | `clauded` → `/login`, `codexed` → `codex login` |
+| **Port conflict** | Set `DEV_SESSIONS_GATEWAY_PORT=<port>` before `gateway install` |
 
 ## Want More Detail?
 
-See [`dev-sessions/README.md`](./dev-sessions/README.md) for:
-- Architecture diagrams
-- Tool behavior and safety constraints
-- Troubleshooting playbooks
-- Future roadmap ideas
+See [`README.md`](./README.md) for architecture, volume mounts, and advanced usage.

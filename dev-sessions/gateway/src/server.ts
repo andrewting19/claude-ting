@@ -77,9 +77,9 @@ app.post('/create-session', async (req: Request, res: Response) => {
 
     // Validate mode parameter if provided
     const modeChoice = mode || 'docker';
-    if (modeChoice !== 'docker' && modeChoice !== 'native') {
+    if (modeChoice !== 'docker' && modeChoice !== 'native' && modeChoice !== 'native-yolo') {
       return res.status(400).json({
-        error: 'mode must be either "docker" or "native"'
+        error: 'mode must be "docker", "native", or "native-yolo"'
       });
     }
 

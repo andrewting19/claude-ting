@@ -181,14 +181,10 @@ echo "Logs: $LOG_FILE"
 BROWSEREOF
 RUN chmod +x /usr/local/bin/start-browser
 
-# Install dev-sessions-mcp
-COPY dev-sessions/mcp /opt/dev-sessions-mcp
+# Install dev-sessions CLI
 RUN bash -c "source $NVM_DIR/nvm.sh && \
-    cd /opt/dev-sessions-mcp && \
-    npm install && \
-    npm run build && \
-    npm install -g . && \
-    ln -s \$(which dev-sessions-mcp) /usr/local/bin/dev-sessions-mcp"
+    npm install -g dev-sessions && \
+    ln -s \$(which dev-sessions) /usr/local/bin/dev-sessions"
 
 # Configure git globally to handle ownership issues and set default credentials
 RUN git config --system --add safe.directory '*' && \
@@ -286,59 +282,22 @@ if [ "$DISABLE_MCPS" = "1" ]; then
   exec "$@"
 fi
 
-# Ensure dev-sessions MCP is configured in ~/.claude.json
-if [ -f "/root/.claude.json" ]; then
-  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" --arg hostpath "${HOST_PATH:-}" \
-     '.mcpServers = (.mcpServers // {}) |
-      .mcpServers["dev-sessions"] = {
+# Add Playwright MCP to ~/.claude.json if browser is enabled
+if [ "$ENABLE_BROWSER" = "1" ] && [ -f "/root/.claude.json" ]; then
+  jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
+     '.mcpServers["playwright"] = {
         "type": "stdio",
-        "command": "dev-sessions-mcp",
-        "args": [],
-        "env": {
-          "GATEWAY_URL": $gateway,
-          "HOST_PATH": $hostpath
-        }
+        "command": "npx",
+        "args": ["@playwright/mcp", "--cdp-endpoint", $cdp],
+        "env": {}
       }' \
      /root/.claude.json > /root/.claude.json.tmp && safe_replace_file /root/.claude.json.tmp /root/.claude.json
-  echo "✓ Ensured dev-sessions MCP entry in ~/.claude.json"
-
-  # Add Playwright MCP if browser is enabled
-  if [ "$ENABLE_BROWSER" = "1" ]; then
-    jq --arg cdp "http://localhost:${CHROME_CDP_PORT:-9222}" \
-       '.mcpServers["playwright"] = {
-          "type": "stdio",
-          "command": "npx",
-          "args": ["@playwright/mcp", "--cdp-endpoint", $cdp],
-          "env": {}
-        }' \
-       /root/.claude.json > /root/.claude.json.tmp && safe_replace_file /root/.claude.json.tmp /root/.claude.json
-    echo "✓ Added Playwright MCP (connecting to CDP on port ${CHROME_CDP_PORT:-9222})"
-  fi
+  echo "✓ Added Playwright MCP (connecting to CDP on port ${CHROME_CDP_PORT:-9222})"
 fi
 
-# Ensure MCP configuration exists (gets overwritten by mount)
+# Ensure ~/.claude/config.json exists for optional MCP configuration
 if [ ! -f "/root/.claude/config.json" ]; then
-  echo "✓ Creating MCP configuration"
-  cat > /root/.claude/config.json << MCPEOF
-{
-  "mcpServers": {
-    "dev-sessions": {
-      "command": "dev-sessions-mcp",
-      "env": {
-        "GATEWAY_URL": "$DEV_SESSIONS_GATEWAY_URL",
-        "HOST_PATH": "${HOST_PATH:-}"
-      }
-    }
-  }
-}
-MCPEOF
-else
-  # MCP config exists, ensure dev-sessions is configured with HOST_PATH
-  echo "✓ Updating dev-sessions MCP in existing config"
-  jq --arg gateway "$DEV_SESSIONS_GATEWAY_URL" --arg hostpath "${HOST_PATH:-}" \
-    '.mcpServers["dev-sessions"] = {"command": "dev-sessions-mcp", "env": {"GATEWAY_URL": $gateway, "HOST_PATH": $hostpath}}' \
-    /root/.claude/config.json > /root/.claude/config.json.tmp && \
-    safe_replace_file /root/.claude/config.json.tmp /root/.claude/config.json
+  echo '{}' > /root/.claude/config.json
 fi
 
 # Add Playwright MCP to config.json if browser is enabled
@@ -406,54 +365,10 @@ if [ ! -f "$CODEX_CONFIG" ]; then
   cat > "$CODEX_CONFIG" << CODEXEOF
 tool_output_token_limit = 25000
 web_search = "live"
-
-[mcp_servers."dev-sessions"]
-command = "dev-sessions-mcp"
-
-[mcp_servers."dev-sessions".env]
-GATEWAY_URL = "$DEV_SESSIONS_GATEWAY_URL"
-HOST_PATH = "${HOST_PATH:-}"
 CODEXEOF
-  echo "✓ Created Codex config with dev-sessions MCP entry (shadow copy)"
-else
-  # Ensure dev-sessions config is correct inside the shadow copy
-  export DEV_GATEWAY="$DEV_SESSIONS_GATEWAY_URL"
-  export DEV_HOST_PATH="${HOST_PATH:-}"
-  python - <<'PY'
-import os, re, pathlib
-
-config_path = os.environ["CODEX_CONFIG"]
-gateway = os.environ["DEV_GATEWAY"]
-host_path = os.environ.get("DEV_HOST_PATH", "")
-
-text = pathlib.Path(config_path).read_text(encoding="utf-8")
-
-if '[mcp_servers."dev-sessions"]' not in text:
-    text += f'\n[mcp_servers."dev-sessions"]\ncommand = "dev-sessions-mcp"\n'
-
-if '[mcp_servers."dev-sessions".env]' not in text:
-    text += f'\n[mcp_servers."dev-sessions".env]\nGATEWAY_URL = "{gateway}"\nHOST_PATH = "{host_path}"\n'
-else:
-    pattern = r'(\[mcp_servers\."dev-sessions"\.env\][^\[]*)'
-    def repl(match):
-        block = match.group(1)
-        # Update or add GATEWAY_URL
-        if "GATEWAY_URL" in block:
-            block = re.sub(r'GATEWAY_URL\s*=.*', f'GATEWAY_URL = "{gateway}"', block)
-        else:
-            block = block.rstrip() + f'\nGATEWAY_URL = "{gateway}"\n'
-        # Update or add HOST_PATH
-        if "HOST_PATH" in block:
-            block = re.sub(r'HOST_PATH\s*=.*', f'HOST_PATH = "{host_path}"', block)
-        else:
-            block = block.rstrip() + f'\nHOST_PATH = "{host_path}"\n'
-        return block
-    text = re.sub(pattern, repl, text, count=1, flags=re.S)
-
-pathlib.Path(config_path).write_text(text, encoding="utf-8")
-PY
-  echo "✓ Updated dev-sessions config in Codex config shadow copy"
+  echo "✓ Created Codex config (shadow copy)"
 fi
+
 
 # Add Playwright MCP to Codex config if browser is enabled
 if [ "$ENABLE_BROWSER" = "1" ]; then

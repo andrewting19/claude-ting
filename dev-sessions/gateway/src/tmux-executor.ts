@@ -58,15 +58,22 @@ export class TmuxExecutor {
    * Creates an interactive shell so .zshrc is loaded (for aliases, PATH, etc.)
    * Automatically dismisses the API key prompt (docker mode only)
    *
-   * @param mode - 'docker' uses clauded/codexed wrappers, 'native' runs claude/codex directly
+   * @param mode - 'docker' uses clauded/codexed wrappers, 'native' runs claude/codex directly,
+   *               'native-yolo' runs claude/codex directly with --dangerously-skip-permissions /
+   *               --dangerously-bypass-approvals-and-sandbox flags
    */
-  async createSession(tmuxSessionName: string, workspacePath: string, cli: 'claude' | 'codex' = 'claude', mode: 'docker' | 'native' = 'docker'): Promise<void> {
+  async createSession(tmuxSessionName: string, workspacePath: string, cli: 'claude' | 'codex' = 'claude', mode: 'docker' | 'native' | 'native-yolo' = 'docker'): Promise<void> {
     // Escape single quotes in workspace path for send-keys
     const escapedPath = workspacePath.replace(/'/g, "'\\''");
 
     // Choose the command based on mode and cli
     let cliCommand: string;
-    if (mode === 'native') {
+    if (mode === 'native-yolo') {
+      // Run CLI directly with bypass flags (no Docker isolation)
+      cliCommand = cli === 'codex'
+        ? 'codex --dangerously-bypass-approvals-and-sandbox'
+        : 'claude --dangerously-skip-permissions';
+    } else if (mode === 'native') {
       // Run CLI directly without flags (user handles permissions)
       cliCommand = cli;
     } else {
@@ -77,7 +84,7 @@ export class TmuxExecutor {
     // Create session with explicit window name (so agentboard shows the session name, not "docker")
     // Then send keys to cd and run the chosen cli
     // Docker mode: dismiss API key prompt after startup
-    // Native mode: no prompt dismissal needed
+    // Native / native-yolo: no prompt dismissal needed
     let command = `tmux new-session -d -s ${tmuxSessionName} -n ${tmuxSessionName} && tmux send-keys -t ${tmuxSessionName} 'cd ${escapedPath} && ${cliCommand}' C-m`;
 
     if (mode === 'docker') {
