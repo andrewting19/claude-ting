@@ -46,8 +46,10 @@ claude-docker() {
         docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
 	    fi
 
-	    # Pass host workspace path for dev-sessions MCP
+	    # Pass host workspace path so dev-sessions CLI knows the real project dir
 	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
+	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    # Point PostgreSQL to host
 	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
 
@@ -187,11 +189,12 @@ codex-docker() {
 
 	    local docker_cmd="/usr/local/bin/docker run -it --rm"
 
+	    # Pass host workspace path so dev-sessions CLI knows the real project dir
 	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
+	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    # Point PostgreSQL to host
 	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
-	    # Ensure MCP inside container points to host gateway
-	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
 	    if [ -n "$ENABLE_BROWSER" ]; then
 	        docker_cmd="$docker_cmd -e ENABLE_BROWSER=\"$ENABLE_BROWSER\""
