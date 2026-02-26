@@ -134,13 +134,12 @@ Docker Container (ubuntu-dev)
    - Utilities (ripgrep, fd-find, bat, jq, htop)
    - Claude Code CLI (`@anthropic-ai/claude-code`)
    - Codex CLI (`@openai/codex`)
-   - Entrypoint script for OAuth credential merging and default MCP config generation (creates `dev-sessions` block if missing; prefers runtime env `DEV_SESSIONS_GATEWAY_URL`, default `http://host.docker.internal:6767`)
+   - Entrypoint script for OAuth credential merging and optional Playwright MCP config
 
 2. **Shell Functions (`claude-docker`, `codex-docker`, `claudedb`)**: Zsh helpers that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
    - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
-   - Passes `DEV_SESSIONS_GATEWAY_URL` (default `http://host.docker.internal:6767`) so MCP traffic hits the host gateway when running inside Docker
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
    - `claudedb` variant enables browser automation with Chromium + Playwright MCP
 
@@ -306,7 +305,7 @@ Two authentication methods are supported for Claude, and Codex has a very simila
 | **Authentication failed** | `clauded` → `/login`, `codexed` → `codex login` (or copy `~/.codex/auth.json`) |
 | **Can't access files** | Check Docker Desktop file sharing permissions |
 | **Port already in use** | Change the host port: `-p 3001:3000` |
-| **MCP / dev-sessions unreachable** | Ensure `DEV_SESSIONS_GATEWAY_URL` is set to `http://host.docker.internal:6767` (default), rebuild the image, and re-source the helper so `codexed`/`clauded` pass it through |
+| **Dev sessions unreachable** | Ensure the gateway daemon is running: `dev-sessions gateway status` |
 
 ### Debug Commands
 
@@ -356,7 +355,7 @@ docker run --rm ubuntu-dev getent hosts host.docker.internal
 - **Project dependencies**: Install in your project, not the Docker image
 - **Performance**: First build takes ~5 minutes; subsequent runs are instant
 - **Security**: Container isolation protects your Mac from unintended changes
-- **Codex MCP config**: The entrypoint auto-inserts the `dev-sessions` MCP block into `~/.codex/config.toml`. Delete or edit that block if you prefer a different configuration.
+- **Codex config**: The entrypoint creates a minimal `~/.codex/config.toml` if one doesn't exist.
 
 ## 🤝 Contributing
 
