@@ -48,6 +48,8 @@ claude-docker() {
 
 	    # Pass host workspace path so dev-sessions CLI knows the real project dir
 	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Container mount point for dev-sessions path translation (container path → host path)
+	    docker_cmd="$docker_cmd -e CONTAINER_WORKSPACE=/workspace"
 	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
 	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    # Point PostgreSQL to host
@@ -191,6 +193,8 @@ codex-docker() {
 
 	    # Pass host workspace path so dev-sessions CLI knows the real project dir
 	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    # Container mount point for dev-sessions path translation (container path → host path)
+	    docker_cmd="$docker_cmd -e CONTAINER_WORKSPACE=/workspace"
 	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
 	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    # Point PostgreSQL to host
