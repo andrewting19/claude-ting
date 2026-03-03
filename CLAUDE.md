@@ -9,7 +9,7 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 - Entry point `/entrypoint.sh` that merges host OAuth and optionally starts browser automation.
 
 ## Key Components
-- `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1`, installs `dev-sessions` CLI, and ensures `/root/.claude` and `/root/.codex` exist.
+- `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1` and `DEV_SESSIONS_SANDBOX=1`, installs `dev-sessions` CLI, and ensures `/root/.claude` and `/root/.codex` exist.
  - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
   - Mount the target project to `/workspace` and set it as `-w`.
   - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.

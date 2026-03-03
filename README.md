@@ -271,6 +271,10 @@ The gateway daemon runs on your host machine and handles routing between contain
 
 The `IS_SANDBOX=1` environment variable is set in the Docker image to ensure Claude Code accepts the `--dangerously-skip-permissions` flag in the containerized environment.
 
+### DEV_SESSIONS_SANDBOX Environment Variable
+
+`DEV_SESSIONS_SANDBOX=1` tells the `dev-sessions` CLI to route commands through the HTTP gateway relay instead of managing tmux sessions directly. This is separate from `IS_SANDBOX` to avoid conflicts with Claude Code's own use of that variable.
+
 ### Authentication System
 
 Two authentication methods are supported for Claude, and Codex has a very similar flow:

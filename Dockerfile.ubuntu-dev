@@ -199,8 +199,11 @@ RUN mkdir -p /root/.local/share/nvim && \
     mkdir -p /root/.claude && \
     mkdir -p /root/.codex
 
-# Set sandbox environment variable
+# Set sandbox environment variables
+# IS_SANDBOX=1 is required by Claude Code for --dangerously-skip-permissions
+# DEV_SESSIONS_SANDBOX=1 tells dev-sessions CLI to route through the gateway
 ENV IS_SANDBOX=1
+ENV DEV_SESSIONS_SANDBOX=1
 
 # Create shell initialization script for pyenv and nvm
 RUN echo '# Pyenv initialization' >> /etc/bash.bashrc && \
