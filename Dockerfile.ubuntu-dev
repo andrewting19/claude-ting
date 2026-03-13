@@ -118,17 +118,25 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     nvm use default && \
     npm install -g yarn && \
     npm install -g tsx && \
-    npm install -g @openai/codex && \
     ln -s \$(which node) /usr/local/bin/node && \
     ln -s \$(which npm) /usr/local/bin/npm && \
     ln -s \$(which npx) /usr/local/bin/npx && \
     ln -s \$(which yarn) /usr/local/bin/yarn && \
-    ln -s \$(which tsx) /usr/local/bin/tsx && \
+    ln -s \$(which tsx) /usr/local/bin/tsx"
+
+# Cache-bust: pass --build-arg CLI_VERSION=$(date +%s) to force re-install of Claude/Codex/dev-sessions
+ARG CLI_VERSION=1
+
+# Install Codex
+RUN bash -c "source $NVM_DIR/nvm.sh && \
+    npm install -g @openai/codex && \
     ln -s \$(which codex) /usr/local/bin/codex"
 
 # Install Claude Code using native binary (latest version)
-RUN curl -fsSL https://claude.ai/install.sh | bash -s latest && \
-    ln -s /root/.local/bin/claude /usr/local/bin/claude
+RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install-claude.sh && \
+    bash /tmp/install-claude.sh && \
+    rm /tmp/install-claude.sh && \
+    ln -sf /root/.local/bin/claude /usr/local/bin/claude
 ENV PATH="/root/.local/bin:$PATH"
 
 # Install Bun
@@ -254,7 +262,7 @@ if [ -f "/root/.claude.host.json" ]; then
   # NOTE: mcpServers is intentionally excluded — the entrypoint configures Docker-
   # specific MCPs (dev-sessions, optionally playwright) below.  Merging host
   # mcpServers would pull in host-only MCPs (e.g. playwriter) and Docker-wrong URLs.
-  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache"
+  CONFIG_KEYS="oauthAccount hasSeenTasksHint userID hasCompletedOnboarding lastOnboardingVersion subscriptionNoticeCount hasAvailableSubscription s1mAccessCache cachedGrowthBookFeatures cachedStatsigGates cachedDynamicConfigs"
 
   # Build jq expression for extraction
   JQ_EXPR=""
