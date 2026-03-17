@@ -44,6 +44,27 @@ Inside the container run `/login` (Claude) or `codex login` once to seed credent
 - Gateway defaults to `host.docker.internal:6767` unless `DEV_SESSIONS_GATEWAY_URL` is set.
 - See the [`dev-sessions` npm package](https://www.npmjs.com/package/dev-sessions) for full docs.
 
+## Google Workspace CLI (gogcli)
+[gogcli](https://github.com/steipete/gogcli) is pre-installed in the Docker image for Google Workspace API access (Sheets, Drive, Docs, Gmail, Calendar, etc.).
+
+### How it works in containers
+- The `clauded`/`codexed` helpers automatically mount the host's gog config read-only into `/root/.config/gogcli` and pass `GOG_KEYRING_PASSWORD` so tokens decrypt automatically.
+- Inside a container, just use `gog` directly: `gog sheets create "My Sheet"`, `gog drive list`, etc.
+- No extra auth needed — refresh tokens don't expire.
+
+### Host setup (one-time)
+1. Install: `brew install steipete/tap/gogcli`
+2. Switch to file-based keyring: `gog auth keyring file` (set passphrase, e.g. `gog`)
+3. Load OAuth client: `gog auth credentials <client_secret.json>` (Desktop app type, not Web)
+4. Enable APIs in Google Cloud Console (Sheets, Drive, Docs, etc.)
+5. Login: `GOG_KEYRING_PASSWORD=gog gog auth login --services all`
+6. **macOS only**: create symlink to avoid spaces in path:
+   ```bash
+   ln -sfn ~/Library/Application\ Support/gogcli ~/.gogcli-config
+   ```
+
+The helpers look for gog config at `~/.config/gogcli` (Linux) then `~/.gogcli-config` (macOS symlink). If neither exists, gog is simply not mounted — nothing breaks.
+
 ## Browser Automation (Optional)
 Browser support is **disabled by default** to avoid token overhead from the Playwright MCP. Use `claudedb` for easy browser-enabled sessions:
 

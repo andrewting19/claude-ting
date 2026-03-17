@@ -189,6 +189,13 @@ echo "Logs: $LOG_FILE"
 BROWSEREOF
 RUN chmod +x /usr/local/bin/start-browser
 
+# Install gogcli (Google Workspace CLI — Sheets, Drive, Docs, etc.)
+RUN ARCH=$(dpkg --print-architecture) && \
+    GOG_VERSION="0.12.0" && \
+    curl -fsSL "https://github.com/steipete/gogcli/releases/download/v${GOG_VERSION}/gogcli_${GOG_VERSION}_linux_${ARCH}.tar.gz" \
+      | tar xz -C /usr/local/bin gog && \
+    chmod +x /usr/local/bin/gog
+
 # Install dev-sessions CLI
 RUN bash -c "source $NVM_DIR/nvm.sh && \
     npm install -g dev-sessions && \

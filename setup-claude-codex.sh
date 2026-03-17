@@ -118,6 +118,22 @@ claude-docker() {
 	        docker_cmd="$docker_cmd -e GH_TOKEN"
 	    fi
 
+    # Mount gogcli config (Google Workspace CLI) if available.
+    # gog stores config at:
+    #   Linux:  ~/.config/gogcli           (no spaces, works directly)
+    #   macOS:  ~/Library/Application Support/gogcli  (spaces break eval)
+    # On macOS, create a symlink: ln -sfn ~/Library/Application\ Support/gogcli ~/.gogcli-config
+    local gog_config_dir=""
+    if [ -d "$HOME/.config/gogcli" ]; then
+        gog_config_dir="$HOME/.config/gogcli"
+    elif [ -d "$HOME/.gogcli-config" ]; then
+        gog_config_dir="$HOME/.gogcli-config"
+    fi
+    if [ -n "$gog_config_dir" ]; then
+        docker_cmd="$docker_cmd -v \"$gog_config_dir:/root/.config/gogcli:ro\""
+        docker_cmd="$docker_cmd -e GOG_KEYRING_PASSWORD"
+    fi
+
 	    # Add extra args if provided
 	    if [ -n "$extra_args" ]; then
 	        docker_cmd="$docker_cmd $extra_args"
@@ -127,8 +143,11 @@ claude-docker() {
 	    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions${claude_args:+ $claude_args}"
 
 	    # Execute the command
-	    if [ -n "$gh_token_env" ]; then
-	        ( export GH_TOKEN="$gh_token_env"; eval $docker_cmd )
+	    local env_exports=""
+	    [ -n "$gh_token_env" ] && env_exports="export GH_TOKEN=\"$gh_token_env\";"
+	    [ -n "$gog_config_dir" ] && env_exports="${env_exports} export GOG_KEYRING_PASSWORD=\"${GOG_KEYRING_PASSWORD:-gog}\";"
+	    if [ -n "$env_exports" ]; then
+	        ( eval "$env_exports" eval $docker_cmd )
 	    else
 	        eval $docker_cmd
 	    fi
@@ -230,6 +249,20 @@ codex-docker() {
 	    if [ -n "$gh_token_env" ]; then
 	        docker_cmd="$docker_cmd -e GH_TOKEN"
 	    fi
+
+    # Mount gogcli config (Google Workspace CLI) if available.
+    # See claude-docker() for path details.
+    local gog_config_dir=""
+    if [ -d "$HOME/.config/gogcli" ]; then
+        gog_config_dir="$HOME/.config/gogcli"
+    elif [ -d "$HOME/.gogcli-config" ]; then
+        gog_config_dir="$HOME/.gogcli-config"
+    fi
+    if [ -n "$gog_config_dir" ]; then
+        docker_cmd="$docker_cmd -v \"$gog_config_dir:/root/.config/gogcli:ro\""
+        docker_cmd="$docker_cmd -e GOG_KEYRING_PASSWORD"
+    fi
+
 	    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
 	    docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
 	    docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
@@ -244,8 +277,11 @@ codex-docker() {
 	        docker_cmd="$docker_cmd $codex_args"
 	    fi
 
-	    if [ -n "$gh_token_env" ]; then
-	        ( export GH_TOKEN="$gh_token_env"; eval $docker_cmd )
+	    local env_exports=""
+	    [ -n "$gh_token_env" ] && env_exports="export GH_TOKEN=\"$gh_token_env\";"
+	    [ -n "$gog_config_dir" ] && env_exports="${env_exports} export GOG_KEYRING_PASSWORD=\"${GOG_KEYRING_PASSWORD:-gog}\";"
+	    if [ -n "$env_exports" ]; then
+	        ( eval "$env_exports" eval $docker_cmd )
 	    else
 	        eval $docker_cmd
 	    fi
