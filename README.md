@@ -140,7 +140,7 @@ Docker Container (ubuntu-dev)
 2. **Shell Functions (`claude-docker`, `codex-docker`, `claudedb`)**: Zsh helpers that:
    - Accepts a path argument (defaults to current directory)
    - Converts relative paths to absolute paths
-   - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
+   - Mounts Docker-isolated Claude state from `~/.claude-docker` and Codex state from `~/.codex`
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
    - Normalizes Claude/Codex tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize
    - `claudedb` variant enables browser automation with Chromium + Playwright MCP
@@ -148,9 +148,9 @@ Docker Container (ubuntu-dev)
 3. **Volume Mounts**:
    - Project directory → `/workspace` (working directory)
    - Neovim config → `/root/.local/share/nvim` (shared editor data)
-   - Claude config → `~/.claude` directory (OAuth persistence)
-   - Claude per-project state (auto-memory, etc.) → maps host `~/.claude/projects/<sanitized-cwd>/` into Docker's `~/.claude/projects/-workspace/` to avoid cross-project collisions
-   - Host OAuth credentials → `/root/.claude.host.json` (read-only merge source)
+   - Claude Docker state → `~/.claude-docker` (separate from native `~/.claude`, so `/resume` only shows Docker-created Claude sessions)
+   - Claude per-project state (auto-memory, etc.) → maps host `~/.claude-docker/projects/<sanitized-cwd>/` into Docker's `~/.claude/projects/-workspace/` to avoid cross-project collisions
+   - Host Claude credentials → `/root/.claude/.credentials.json` (read-only) and `/root/.claude.host.json` (read-only merge source)
    - Codex config → `~/.codex` directory (contains `auth.json`, `config.toml`, prompts, etc.)
 
 ## 📦 Installation Details
@@ -264,8 +264,9 @@ The gateway daemon runs on your host machine and handles routing between contain
 | `-it` | Interactive terminal for Claude's UI |
 | `--rm` | Auto-cleanup after exit |
 | `-v $path:/workspace` | Mount your project |
-| `-v ~/.claude.json:/root/.claude.host.json:ro` | OAuth credential source (read-only) |
-| `-v ~/.claude:/root/.claude` | Claude configuration (persistent) |
+| `-v ~/.claude.json:/root/.claude.host.json:ro` | OAuth/user metadata merge source (read-only) |
+| `-v ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro` | Claude login credentials (read-only) |
+| `-v ~/.claude-docker:/root/.claude` | Docker-specific Claude state (persistent) |
 | `--dangerously-skip-permissions` | **The magic flag** — no prompts! |
 | `--dangerously-bypass-approvals-and-sandbox` | Codex equivalent of the magic flag (only used by `codexed`) |
 
@@ -283,8 +284,8 @@ Two authentication methods are supported for Claude, and Codex has a very simila
 
 **Claude OAuth (Recommended)**
 1. **First time**: Run `/login` inside `clauded`, authenticate via browser
-2. **Tokens**: Saved to `~/.claude.json` on host
-3. **Subsequent runs**: Entrypoint merges OAuth details into `/root/.claude.json`
+2. **Tokens**: Saved to `~/.claude/.credentials.json` and `~/.claude.json` on host
+3. **Subsequent runs**: Entrypoint merges OAuth details into Docker's `~/.claude-docker`, while sessions/history stay isolated from native Claude
 4. **Result**: Seamless authentication across all containers
 
 **Claude API Key (Optional)**

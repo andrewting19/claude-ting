@@ -28,14 +28,17 @@ claude-docker() {
 	        workspace_path="$(cd "$workspace_path" && pwd -P)"
 	    fi
 
-	    # Create ~/.claude directory if it doesn't exist
-	    /bin/mkdir -p "$HOME/.claude"
+	    # Keep Docker Claude state separate from host-native Claude state.
+	    # Sharing ~/.claude makes /resume mix host and container sessions, which can
+	    # restore host cwd/tool context inside the Dockerized TUI.
+	    local claude_docker_home="${CLAUDE_DOCKER_HOME:-$HOME/.claude-docker}"
+	    /bin/mkdir -p "$claude_docker_home"
     # Ensure per-project Claude state (including auto-memory) does not collide in Docker.
     # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
 	    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
 	    local sanitized_cwd
 	    sanitized_cwd="${workspace_path//[^A-Za-z0-9]/-}"
-	    local host_project_state_dir="$HOME/.claude/projects/${sanitized_cwd}"
+	    local host_project_state_dir="$claude_docker_home/projects/${sanitized_cwd}"
 	    /bin/mkdir -p "$host_project_state_dir"
 
     # Build docker command with optional mounts
@@ -58,7 +61,10 @@ claude-docker() {
 	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
 	    docker_cmd="$docker_cmd -w /workspace"
 	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
-	    docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
+	    docker_cmd="$docker_cmd -v \"$claude_docker_home:/root/.claude\""
+	    if [ -f "$HOME/.claude/.credentials.json" ]; then
+	        docker_cmd="$docker_cmd -v \"$HOME/.claude/.credentials.json:/root/.claude/.credentials.json:ro\""
+	    fi
     # Map Docker's /workspace project-state dir to the host's project-specific state dir.
     docker_cmd="$docker_cmd -v \"$host_project_state_dir:/root/.claude/projects/-workspace\""
 
@@ -67,15 +73,15 @@ claude-docker() {
     # The entrypoint adds Docker-specific MCPs (dev-sessions, optionally playwright).
     # This overlay also prevents the entrypoint from contaminating the host's config
     # through the ~/.claude bind mount.
-    local docker_mcp_config="$HOME/.claude/.docker-mcp-config.json"
+    local docker_mcp_config="$claude_docker_home/.docker-mcp-config.json"
     echo '{}' > "$docker_mcp_config"
 
     # Opt-in: include specific host MCPs inside Docker.
     # Set CLAUDE_DOCKER_INCLUDE_MCPS="some-mcp,another" or list them one-per-line
     # in ~/.claude/docker-mcp-include.
     local include_mcps="${CLAUDE_DOCKER_INCLUDE_MCPS:-}"
-    if [ -z "$include_mcps" ] && [ -f "$HOME/.claude/docker-mcp-include" ]; then
-        include_mcps="$(paste -sd, "$HOME/.claude/docker-mcp-include")"
+    if [ -z "$include_mcps" ] && [ -f "$claude_docker_home/docker-mcp-include" ]; then
+        include_mcps="$(paste -sd, "$claude_docker_home/docker-mcp-include")"
     fi
     if [ -n "$include_mcps" ] && [ -f "$HOME/.claude/config.json" ]; then
         local jq_names
