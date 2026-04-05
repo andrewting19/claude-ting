@@ -12,14 +12,14 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 - `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1` and `DEV_SESSIONS_SANDBOX=1`, installs `dev-sessions` CLI, and ensures `/root/.claude` and `/root/.codex` exist.
 - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
   - Mount the target project to `/workspace` and set it as `-w`.
-  - Mount `~/.local/share/nvim`, plus `~/.claude-docker` or `~/.codex` for persistent Docker state.
-  - Map Claude's per-project state dir (`~/.claude-docker/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
-  - Mount `~/.claude/.credentials.json` and `~/.claude.json` read-only so Docker Claude can reuse host auth without sharing native session history.
+  - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
+  - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
+  - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
   - Pass `HOST_PATH` and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
   - Normalize Claude/Codex tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize.
 
 ## Authentication Behavior
-- Claude: Docker sessions persist under `~/.claude-docker`, separate from native `~/.claude`. Host `~/.claude/.credentials.json` and `~/.claude.json` are mounted read-only so Docker Claude reuses the same login without mixing `/resume` history with host-native sessions. `ANTHROPIC_API_KEY` is passed through when exported on the host.
+- Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.
 - Codex: `~/.codex` is mounted; entrypoint creates a minimal `config.toml` if missing. Login once via `codex login` (or pipe `OPENAI_API_KEY` to `codex login --with-api-key`).
 - GitHub CLI: `gh` is installed but not auto-authenticated. On macOS, `gh` commonly stores the token in Keychain (not in `~/.config/gh/hosts.yml`), so mounting `~/.config/gh` alone is often insufficient. Prefer forwarding `GH_TOKEN` into the container (the helper functions do this automatically by calling `gh auth token`), or export `GH_TOKEN` yourself.
 
@@ -97,4 +97,4 @@ result = json.loads(ws.recv())
 ## Maintenance Notes
 - Rebuild with `rebuild.sh` for a no-cache build.
 - Git is pre-configured system-wide (user/email set) and `safe.directory` is `*`.
-- Containers are ephemeral; mounted directories (`/workspace`, `~/.claude-docker`, `~/.codex`, `~/.local/share/nvim`) persist your changes and auth tokens.
+- Containers are ephemeral; mounted directories (`/workspace`, `~/.claude`, `~/.codex`, `~/.local/share/nvim`) persist your changes and auth tokens.
