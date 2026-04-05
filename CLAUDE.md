@@ -16,7 +16,7 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
   - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
   - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
   - Pass `HOST_PATH` and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
-  - Normalize Claude's tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize.
+  - Normalize Claude/Codex tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize.
 
 ## Authentication Behavior
 - Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.

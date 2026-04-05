@@ -274,11 +274,13 @@ codex-docker() {
         docker_cmd="$docker_cmd $docker_extra_args"
     fi
 
-    docker_cmd="$docker_cmd ubuntu-dev codex --dangerously-bypass-approvals-and-sandbox"
-
+    # Keep Codex on the same normalized tty path as Claude so Dockerized
+    # full-screen UIs do not depend on Docker's raw PTY defaults.
+    local codex_cmd="stty opost onlcr 2>/dev/null || true; exec codex --dangerously-bypass-approvals-and-sandbox"
 	    if [ -n "$codex_args" ]; then
-	        docker_cmd="$docker_cmd $codex_args"
+	        codex_cmd="$codex_cmd $codex_args"
 	    fi
+    docker_cmd="$docker_cmd ubuntu-dev bash -lc $(printf '%q' \"$codex_cmd\")"
 
 	    local env_exports=""
 	    [ -n "$gh_token_env" ] && env_exports="export GH_TOKEN=\"$gh_token_env\";"
