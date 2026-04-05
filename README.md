@@ -143,6 +143,7 @@ Docker Container (ubuntu-dev)
    - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
    - Normalizes Claude/Codex tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize
+   - Keeps Claude fully inside Docker by overlaying empty Docker-local `shell-snapshots`, `session-env`, and `sessions` dirs on top of the mounted host `~/.claude` runtime state
    - `claudedb` variant enables browser automation with Chromium + Playwright MCP
 
 3. **Volume Mounts**:
@@ -150,6 +151,7 @@ Docker Container (ubuntu-dev)
    - Neovim config → `/root/.local/share/nvim` (shared editor data)
    - Claude config → `~/.claude` directory (OAuth persistence)
    - Claude per-project state (auto-memory, etc.) → maps host `~/.claude/projects/<sanitized-cwd>/` into Docker's `~/.claude/projects/-workspace/` to avoid cross-project collisions
+   - Claude shell/session runtime state → `~/.claude/docker-runtime/{shell-snapshots,session-env,sessions}` (prevents host shell context from leaking into Docker Claude)
    - Host OAuth credentials → `/root/.claude.host.json` (read-only merge source)
    - Codex config → `~/.codex` directory (contains `auth.json`, `config.toml`, prompts, etc.)
 

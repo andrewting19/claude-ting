@@ -30,6 +30,10 @@ claude-docker() {
 
 	    # Create ~/.claude directory if it doesn't exist
 	    /bin/mkdir -p "$HOME/.claude"
+	    # Keep Claude's shell/session runtime state Docker-local so it does not
+	    # restore a host shell context into the containerized TUI.
+	    local claude_docker_runtime_dir="$HOME/.claude/docker-runtime"
+	    /bin/mkdir -p "$claude_docker_runtime_dir/shell-snapshots" "$claude_docker_runtime_dir/session-env" "$claude_docker_runtime_dir/sessions"
     # Ensure per-project Claude state (including auto-memory) does not collide in Docker.
     # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
 	    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
@@ -39,28 +43,25 @@ claude-docker() {
 	    /bin/mkdir -p "$host_project_state_dir"
 
     # Build docker command with optional mounts
-    local docker_cmd="/usr/local/bin/docker run -it --rm"
+    local -a docker_cmd=(/usr/local/bin/docker run -it --rm)
 
     # Pass through API key if set (optional, OAuth is preferred)
     if [ -n "$ANTHROPIC_API_KEY" ]; then
-        docker_cmd="$docker_cmd -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\""
+        docker_cmd+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
 	    fi
 
-	    # Pass host workspace path so dev-sessions CLI knows the real project dir
-	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
-	    # Container mount point for dev-sessions path translation (container path → host path)
-	    docker_cmd="$docker_cmd -e CONTAINER_WORKSPACE=/workspace"
-	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
-	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
 	    # Point PostgreSQL to host
-	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
+	    docker_cmd+=(-e "POSTGRES_HOST=host.docker.internal")
 
-	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
-	    docker_cmd="$docker_cmd -w /workspace"
-	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
-	    docker_cmd="$docker_cmd -v \"$HOME/.claude:/root/.claude\""
+	    docker_cmd+=(-v "$workspace_path:/workspace")
+	    docker_cmd+=(-w /workspace)
+	    docker_cmd+=(-v "$HOME/.local/share/nvim:/root/.local/share/nvim")
+	    docker_cmd+=(-v "$HOME/.claude:/root/.claude")
+	    docker_cmd+=(-v "$claude_docker_runtime_dir/shell-snapshots:/root/.claude/shell-snapshots")
+	    docker_cmd+=(-v "$claude_docker_runtime_dir/session-env:/root/.claude/session-env")
+	    docker_cmd+=(-v "$claude_docker_runtime_dir/sessions:/root/.claude/sessions")
     # Map Docker's /workspace project-state dir to the host's project-specific state dir.
-    docker_cmd="$docker_cmd -v \"$host_project_state_dir:/root/.claude/projects/-workspace\""
+    docker_cmd+=(-v "$host_project_state_dir:/root/.claude/projects/-workspace")
 
     # Start with an empty config.json for Docker. Host MCPs are excluded by default
     # since they often don't work inside containers (wrong URLs, host-only extensions).
@@ -86,11 +87,11 @@ claude-docker() {
     fi
 
     # Overlay so container sees (and modifies) this instead of the host original
-    docker_cmd="$docker_cmd -v \"$docker_mcp_config:/root/.claude/config.json\""
+    docker_cmd+=(-v "$docker_mcp_config:/root/.claude/config.json")
 
     # Mount .claude.json as .claude.host.json for OAuth credential merging
 	    if [ -f "$HOME/.claude.json" ]; then
-	        docker_cmd="$docker_cmd -v \"$HOME/.claude.json:/root/.claude.host.json:ro\""
+	        docker_cmd+=(-v "$HOME/.claude.json:/root/.claude.host.json:ro")
 	    fi
 
 	    # Mount gh CLI config.
@@ -98,10 +99,10 @@ claude-docker() {
 	    # and mounting such a hosts.yml into Linux makes `gh auth status` report an invalid
 	    # "default" token. Mount config.yml always, and only mount hosts.yml if it has a token.
 	    if [ -f "$HOME/.config/gh/config.yml" ]; then
-	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro\""
+	        docker_cmd+=(-v "$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro")
 	    fi
 	    if [ -f "$HOME/.config/gh/hosts.yml" ] && grep -q "oauth_token:" "$HOME/.config/gh/hosts.yml" 2>/dev/null; then
-	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro\""
+	        docker_cmd+=(-v "$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro")
 	    fi
 
 	    # Forward GitHub auth into the container.
@@ -115,7 +116,7 @@ claude-docker() {
 	        gh_token_env="$(gh auth token 2>/dev/null || true)"
 	    fi
 	    if [ -n "$gh_token_env" ]; then
-	        docker_cmd="$docker_cmd -e GH_TOKEN"
+	        docker_cmd+=(-e GH_TOKEN)
 	    fi
 
     # Mount gogcli config (Google Workspace CLI) if available.
@@ -130,29 +131,30 @@ claude-docker() {
         gog_config_dir="$HOME/.gogcli-config"
     fi
     if [ -n "$gog_config_dir" ]; then
-        docker_cmd="$docker_cmd -v \"$gog_config_dir:/root/.config/gogcli:ro\""
-        docker_cmd="$docker_cmd -e GOG_KEYRING_PASSWORD"
+        docker_cmd+=(-v "$gog_config_dir:/root/.config/gogcli:ro")
+        docker_cmd+=(-e GOG_KEYRING_PASSWORD)
     fi
 
 	    # Add extra args if provided
 	    if [ -n "$extra_args" ]; then
-	        docker_cmd="$docker_cmd $extra_args"
+	        docker_cmd+=(${=extra_args})
     fi
 
 	    # Claude's Linux TUI can misrender after resize when launched directly
 	    # under Docker's PTY. Normalize tty output processing before exec so
 	    # resumed/full-screen redraws behave like native runs.
 	    local claude_cmd="stty opost onlcr 2>/dev/null || true; exec claude --dangerously-skip-permissions${claude_args:+ $claude_args}"
-	    docker_cmd="$docker_cmd ubuntu-dev bash -lc $(printf '%q' "$claude_cmd")"
+	    docker_cmd+=(ubuntu-dev bash -lc "$claude_cmd")
 
 	    # Execute the command
-	    local env_exports=""
-	    [ -n "$gh_token_env" ] && env_exports="export GH_TOKEN=\"$gh_token_env\";"
-	    [ -n "$gog_config_dir" ] && env_exports="${env_exports} export GOG_KEYRING_PASSWORD=\"${GOG_KEYRING_PASSWORD:-gog}\";"
-	    if [ -n "$env_exports" ]; then
-	        ( eval "$env_exports" eval $docker_cmd )
+	    if [ -n "$gh_token_env" ] || [ -n "$gog_config_dir" ]; then
+	        (
+	            [ -n "$gh_token_env" ] && export GH_TOKEN="$gh_token_env"
+	            [ -n "$gog_config_dir" ] && export GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD:-gog}"
+	            "${docker_cmd[@]}"
+	        )
 	    else
-	        eval $docker_cmd
+	        "${docker_cmd[@]}"
 	    fi
 	}
 
@@ -211,33 +213,33 @@ codex-docker() {
         return 1
     fi
 
-	    local docker_cmd="/usr/local/bin/docker run -it --rm"
+	    local -a docker_cmd=(/usr/local/bin/docker run -it --rm)
 
 	    # Pass host workspace path so dev-sessions CLI knows the real project dir
-	    docker_cmd="$docker_cmd -e HOST_PATH=\"$workspace_path\""
+	    docker_cmd+=(-e "HOST_PATH=$workspace_path")
 	    # Container mount point for dev-sessions path translation (container path → host path)
-	    docker_cmd="$docker_cmd -e CONTAINER_WORKSPACE=/workspace"
+	    docker_cmd+=(-e CONTAINER_WORKSPACE=/workspace)
 	    # Explicit gateway URL for dev-sessions CLI (matches the default, but keeps it visible/overridable)
-	    docker_cmd="$docker_cmd -e DEV_SESSIONS_GATEWAY_URL=\"${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}\""
+	    docker_cmd+=(-e "DEV_SESSIONS_GATEWAY_URL=${DEV_SESSIONS_GATEWAY_URL:-http://host.docker.internal:6767}")
 	    # Point PostgreSQL to host
-	    docker_cmd="$docker_cmd -e POSTGRES_HOST=\"host.docker.internal\""
-	    docker_cmd="$docker_cmd -e CODEX_HOME=/root/.codex"
+	    docker_cmd+=(-e "POSTGRES_HOST=host.docker.internal")
+	    docker_cmd+=(-e CODEX_HOME=/root/.codex)
 	    if [ -n "$ENABLE_BROWSER" ]; then
-	        docker_cmd="$docker_cmd -e ENABLE_BROWSER=\"$ENABLE_BROWSER\""
+	        docker_cmd+=(-e "ENABLE_BROWSER=$ENABLE_BROWSER")
 	    fi
-	    docker_cmd="$docker_cmd -v \"$workspace_path:/workspace\""
-	    docker_cmd="$docker_cmd -w /workspace"
-	    docker_cmd="$docker_cmd -v \"$HOME/.local/share/nvim:/root/.local/share/nvim\""
-	    docker_cmd="$docker_cmd -v \"$HOME/.codex:/root/.codex\""
+	    docker_cmd+=(-v "$workspace_path:/workspace")
+	    docker_cmd+=(-w /workspace)
+	    docker_cmd+=(-v "$HOME/.local/share/nvim:/root/.local/share/nvim")
+	    docker_cmd+=(-v "$HOME/.codex:/root/.codex")
 	    # Mount gh CLI config.
 	    # On macOS, hosts.yml commonly does NOT contain an oauth_token (it lives in Keychain),
 	    # and mounting such a hosts.yml into Linux makes `gh auth status` report an invalid
 	    # "default" token. Mount config.yml always, and only mount hosts.yml if it has a token.
 	    if [ -f "$HOME/.config/gh/config.yml" ]; then
-	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro\""
+	        docker_cmd+=(-v "$HOME/.config/gh/config.yml:/root/.config/gh/config.yml:ro")
 	    fi
 	    if [ -f "$HOME/.config/gh/hosts.yml" ] && grep -q "oauth_token:" "$HOME/.config/gh/hosts.yml" 2>/dev/null; then
-	        docker_cmd="$docker_cmd -v \"$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro\""
+	        docker_cmd+=(-v "$HOME/.config/gh/hosts.yml:/root/.config/gh/hosts.yml:ro")
 	    fi
 	    # Forward GitHub auth into the container.
 	    # On macOS, gh stores the token in the system keychain (not in ~/.config/gh/hosts.yml),
@@ -250,7 +252,7 @@ codex-docker() {
 	        gh_token_env="$(gh auth token 2>/dev/null || true)"
 	    fi
 	    if [ -n "$gh_token_env" ]; then
-	        docker_cmd="$docker_cmd -e GH_TOKEN"
+	        docker_cmd+=(-e GH_TOKEN)
 	    fi
 
     # Mount gogcli config (Google Workspace CLI) if available.
@@ -262,16 +264,16 @@ codex-docker() {
         gog_config_dir="$HOME/.gogcli-config"
     fi
     if [ -n "$gog_config_dir" ]; then
-        docker_cmd="$docker_cmd -v \"$gog_config_dir:/root/.config/gogcli:ro\""
-        docker_cmd="$docker_cmd -e GOG_KEYRING_PASSWORD"
+        docker_cmd+=(-v "$gog_config_dir:/root/.config/gogcli:ro")
+        docker_cmd+=(-e GOG_KEYRING_PASSWORD)
     fi
 
-	    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
-	    docker_cmd="$docker_cmd -v \"$codex_history:/root/.codex-shadow/history.jsonl\""
-	    docker_cmd="$docker_cmd -v \"$codex_sessions:/root/.codex-shadow/sessions\""
+    # Persist transcripts to host ~/.codex via bind mounts into the shadow home
+    docker_cmd+=(-v "$codex_history:/root/.codex-shadow/history.jsonl")
+    docker_cmd+=(-v "$codex_sessions:/root/.codex-shadow/sessions")
 
     if [ -n "$docker_extra_args" ]; then
-        docker_cmd="$docker_cmd $docker_extra_args"
+        docker_cmd+=(${=docker_extra_args})
     fi
 
     # Keep Codex on the same normalized tty path as Claude so Dockerized
@@ -280,17 +282,18 @@ codex-docker() {
 	    if [ -n "$codex_args" ]; then
 	        codex_cmd="$codex_cmd $codex_args"
 	    fi
-    docker_cmd="$docker_cmd ubuntu-dev bash -lc $(printf '%q' \"$codex_cmd\")"
+    docker_cmd+=(ubuntu-dev bash -lc "$codex_cmd")
 
-	    local env_exports=""
-	    [ -n "$gh_token_env" ] && env_exports="export GH_TOKEN=\"$gh_token_env\";"
-	    [ -n "$gog_config_dir" ] && env_exports="${env_exports} export GOG_KEYRING_PASSWORD=\"${GOG_KEYRING_PASSWORD:-gog}\";"
-	    if [ -n "$env_exports" ]; then
-	        ( eval "$env_exports" eval $docker_cmd )
-	    else
-	        eval $docker_cmd
-	    fi
-	}
+    if [ -n "$gh_token_env" ] || [ -n "$gog_config_dir" ]; then
+        (
+            [ -n "$gh_token_env" ] && export GH_TOKEN="$gh_token_env"
+            [ -n "$gog_config_dir" ] && export GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD:-gog}"
+            "${docker_cmd[@]}"
+        )
+    else
+        "${docker_cmd[@]}"
+    fi
+}
 
 alias codexed='codex-docker'
 

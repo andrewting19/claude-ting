@@ -15,7 +15,8 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
   - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
   - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
   - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
-  - Pass `HOST_PATH` and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
+  - Pass `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
+  - Important: `clauded` overlays Docker-local `shell-snapshots`, `session-env`, and `sessions` dirs on top of the mounted host `~/.claude` runtime state, because host shell/session metadata can make Claude restore a host shell context inside Docker.
   - Normalize Claude/Codex tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize.
 
 ## Authentication Behavior
