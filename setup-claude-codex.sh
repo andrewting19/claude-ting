@@ -139,8 +139,11 @@ claude-docker() {
 	        docker_cmd="$docker_cmd $extra_args"
     fi
 
-	    # Expose CDP port for browser automation (optional, use -p 9222:9222 in extra_args)
-	    docker_cmd="$docker_cmd ubuntu-dev claude --dangerously-skip-permissions${claude_args:+ $claude_args}"
+	    # Claude's Linux TUI can misrender after resize when launched directly
+	    # under Docker's PTY. Normalize tty output processing before exec so
+	    # resumed/full-screen redraws behave like native runs.
+	    local claude_cmd="stty opost onlcr 2>/dev/null || true; exec claude --dangerously-skip-permissions${claude_args:+ $claude_args}"
+	    docker_cmd="$docker_cmd ubuntu-dev bash -lc $(printf '%q' "$claude_cmd")"
 
 	    # Execute the command
 	    local env_exports=""
@@ -322,4 +325,3 @@ echo "  claudedb /path/to/project       # Specific path with browser"
 echo "  claudedb . \"-p 9222:9222\"       # With external CDP access"
 echo "  # Starts Xvfb, Chromium with CDP, and adds Playwright MCP to agent config"
 echo ""
-

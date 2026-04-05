@@ -81,6 +81,7 @@ dev-sessions kill riven-jg
 | **Full Disk Access** | macOS only — grant the node binary FDA in System Settings → Privacy & Security |
 | **Auth failed** | `clauded` → `/login`, `codexed` → `codex login` |
 | **Port conflict** | Set `DEV_SESSIONS_GATEWAY_PORT=<port>` before `gateway install` |
+| **Claude redraws badly after resize** | Refresh the `clauded` helper from `setup-claude-codex.sh`; it now normalizes tty output before launching Claude |
 
 ## Want More Detail?
 

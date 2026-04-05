@@ -141,6 +141,7 @@ Docker Container (ubuntu-dev)
    - Converts relative paths to absolute paths
    - Mounts OAuth credentials from host for automatic authentication (`~/.claude` or `~/.codex`)
    - Launch the correct CLI with the "no approval" flags (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex)
+   - Normalizes Claude's tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize
    - `claudedb` variant enables browser automation with Chromium + Playwright MCP
 
 3. **Volume Mounts**:
@@ -310,6 +311,7 @@ Two authentication methods are supported for Claude, and Codex has a very simila
 | **Can't access files** | Check Docker Desktop file sharing permissions |
 | **Port already in use** | Change the host port: `-p 3001:3000` |
 | **Dev sessions unreachable** | Ensure the gateway daemon is running: `dev-sessions gateway status` |
+| **Claude TUI redraws badly after resize** | Refresh your shell helper from `setup-claude-codex.sh`; `clauded` now runs `stty opost onlcr` before launching Claude |
 
 ### Debug Commands
 

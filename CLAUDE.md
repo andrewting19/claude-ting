@@ -10,12 +10,13 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 
 ## Key Components
 - `Dockerfile.ubuntu-dev`: Builds the toolchain above, sets `IS_SANDBOX=1` and `DEV_SESSIONS_SANDBOX=1`, installs `dev-sessions` CLI, and ensures `/root/.claude` and `/root/.codex` exist.
- - `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
+- `setup-claude-codex.sh`: Adds zsh helpers `claude-docker`/`codex-docker` (aliases `clauded`/`codexed`) plus `claudedb` for browser-enabled mode. They:
   - Mount the target project to `/workspace` and set it as `-w`.
   - Mount `~/.local/share/nvim`, plus `~/.claude` or `~/.codex` for persistent auth/config.
   - Map Claude's per-project state dir (`~/.claude/projects/<sanitized-cwd>/...`) into Docker's `~/.claude/projects/-workspace` so auto-memory doesn't collide across projects.
   - Mount `~/.claude.json` read-only as `/root/.claude.host.json` for OAuth merging.
   - Pass `HOST_PATH` and `CODEX_HOME=/root/.codex`; forward `ANTHROPIC_API_KEY` if set; accept extra Docker args (ports, env vars).
+  - Normalize Claude's tty output mode before launch so Dockerized full-screen sessions redraw cleanly after resize.
 
 ## Authentication Behavior
 - Claude: If host `~/.claude.json` exists, entrypoint merges selected OAuth/user fields and sets `bypassPermissionsModeAccepted=true` into `/root/.claude.json`. `~/.claude` is mounted read/write; run `/login` inside the container if fresh. `ANTHROPIC_API_KEY` is passed through when exported on the host.
