@@ -132,6 +132,11 @@ RUN bash -c "source $NVM_DIR/nvm.sh && \
     npm install -g @openai/codex && \
     ln -s \$(which codex) /usr/local/bin/codex"
 
+# Install Oracle CLI (forked with ChatGPT model picker fixes)
+RUN bash -c "source $NVM_DIR/nvm.sh && \
+    npm install -g @andrewting19/oracle && \
+    ln -s \$(which oracle) /usr/local/bin/oracle"
+
 # Install Claude Code using native binary (latest version)
 RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install-claude.sh && \
     bash /tmp/install-claude.sh && \

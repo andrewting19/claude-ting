@@ -134,6 +134,7 @@ Docker Container (ubuntu-dev)
    - Utilities (ripgrep, fd-find, bat, jq, htop)
    - Claude Code CLI (`@anthropic-ai/claude-code`)
    - Codex CLI (`@openai/codex`)
+   - Oracle CLI (`@andrewting19/oracle`)
    - Entrypoint script for OAuth credential merging and optional Playwright MCP config
 
 2. **Shell Functions (`claude-docker`, `codex-docker`, `claudedb`)**: Zsh helpers that:

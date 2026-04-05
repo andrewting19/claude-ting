@@ -4,7 +4,7 @@ Guidance for running this repository with Claude Code or Codex CLIs inside the p
 
 ## What This Repo Provides
 - Containerized workflow so both CLIs run with no approval prompts (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex), relying on Docker for isolation.
-- Ubuntu 24.04 image with pyenv Python 3.12, nvm Node 22, Bun, uv, common dev tools (git, neovim, ripgrep, fd-find, bat, jq, htop, gh), and global installs of `@anthropic-ai/claude-code`, `@openai/codex`, and `dev-sessions`.
+- Ubuntu 24.04 image with pyenv Python 3.12, nvm Node 22, Bun, uv, common dev tools (git, neovim, ripgrep, fd-find, bat, jq, htop, gh), and global installs of `@anthropic-ai/claude-code`, `@openai/codex`, `@andrewting19/oracle`, and `dev-sessions`.
 - Optional browser automation via Xvfb + Chromium + Playwright MCP (enable with `ENABLE_BROWSER=1`).
 - Entry point `/entrypoint.sh` that merges host OAuth and optionally starts browser automation.
 
