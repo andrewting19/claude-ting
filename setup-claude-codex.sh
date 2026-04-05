@@ -30,10 +30,6 @@ claude-docker() {
 
 	    # Create ~/.claude directory if it doesn't exist
 	    /bin/mkdir -p "$HOME/.claude"
-	    # Keep Claude's shell/session runtime state Docker-local so it does not
-	    # restore a host shell context into the containerized TUI.
-	    local claude_docker_runtime_dir="$HOME/.claude/docker-runtime"
-	    /bin/mkdir -p "$claude_docker_runtime_dir/shell-snapshots" "$claude_docker_runtime_dir/session-env" "$claude_docker_runtime_dir/sessions"
     # Ensure per-project Claude state (including auto-memory) does not collide in Docker.
     # Claude stores per-project state at: ~/.claude/projects/<sanitized-cwd>/...
 	    # In Docker the CWD is always /workspace, so without this all projects share ~/.claude/projects/-workspace.
@@ -57,9 +53,6 @@ claude-docker() {
 	    docker_cmd+=(-w /workspace)
 	    docker_cmd+=(-v "$HOME/.local/share/nvim:/root/.local/share/nvim")
 	    docker_cmd+=(-v "$HOME/.claude:/root/.claude")
-	    docker_cmd+=(-v "$claude_docker_runtime_dir/shell-snapshots:/root/.claude/shell-snapshots")
-	    docker_cmd+=(-v "$claude_docker_runtime_dir/session-env:/root/.claude/session-env")
-	    docker_cmd+=(-v "$claude_docker_runtime_dir/sessions:/root/.claude/sessions")
     # Map Docker's /workspace project-state dir to the host's project-specific state dir.
     docker_cmd+=(-v "$host_project_state_dir:/root/.claude/projects/-workspace")
 
