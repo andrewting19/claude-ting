@@ -1,21 +1,22 @@
 #!/bin/bash
 
-# Parse flags
-BUILD_ARGS=""
+set -euo pipefail
+
+build_args=()
+
 for arg in "$@"; do
     case "$arg" in
         --no-cache)
-            BUILD_ARGS="$BUILD_ARGS --no-cache"
+            build_args+=(--no-cache)
             ;;
         --update)
-            BUILD_ARGS="$BUILD_ARGS --build-arg CLI_VERSION=$(date +%s)"
+            build_args+=(--build-arg "CLI_VERSION=$(date +%s)")
             ;;
     esac
 done
 
-# Build the Docker image
 echo "Building ubuntu-dev Docker image..."
-docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev . $BUILD_ARGS
+docker build "${build_args[@]}" -f Dockerfile.ubuntu-dev -t ubuntu-dev .
 
 echo ""
 echo "✓ Docker image built successfully!"
