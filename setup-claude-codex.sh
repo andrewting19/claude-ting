@@ -224,6 +224,7 @@ codex-docker() {
 	    docker_cmd+=(-w /workspace)
 	    docker_cmd+=(-v "$HOME/.local/share/nvim:/root/.local/share/nvim")
 	    docker_cmd+=(-v "$HOME/.codex:/root/.codex")
+	    docker_cmd+=(-v "$HOME/.claude:/root/.claude:ro")
 	    # Mount gh CLI config.
 	    # On macOS, hosts.yml commonly does NOT contain an oauth_token (it lives in Keychain),
 	    # and mounting such a hosts.yml into Linux makes `gh auth status` report an invalid

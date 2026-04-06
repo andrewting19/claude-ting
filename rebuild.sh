@@ -16,7 +16,11 @@ for arg in "$@"; do
 done
 
 echo "Building ubuntu-dev Docker image..."
-docker build "${build_args[@]}" -f Dockerfile.ubuntu-dev -t ubuntu-dev .
+if [ ${#build_args[@]} -gt 0 ]; then
+    docker build "${build_args[@]}" -f Dockerfile.ubuntu-dev -t ubuntu-dev .
+else
+    docker build -f Dockerfile.ubuntu-dev -t ubuntu-dev .
+fi
 
 echo ""
 echo "✓ Docker image built successfully!"

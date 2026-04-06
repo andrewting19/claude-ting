@@ -345,18 +345,40 @@ ORIG_CODEX_HOME="${CODEX_HOME:-/root/.codex}"
 # Keep this out of /tmp so Codex can install helper binaries without warnings.
 SHADOW_CODEX_HOME="/root/.codex-shadow"
 mkdir -p "$SHADOW_CODEX_HOME"
-# Copy existing files for baseline (exclude history/sessions to avoid bind-mount conflicts)
+# Copy existing files for baseline, but skip host-specific runtime state that
+# bakes in absolute paths and shell details from the host machine.
+# In particular, shell_snapshots can contain exports like SHELL=/bin/zsh, which
+# breaks inside this Ubuntu image where only /bin/bash exists.
+# Exclude history/sessions as well to avoid bind-mount conflicts.
 if [ -d "$ORIG_CODEX_HOME" ] && [ "$(ls -A "$ORIG_CODEX_HOME" 2>/dev/null)" ]; then
   shopt -s dotglob nullglob
   for item in "$ORIG_CODEX_HOME"/*; do
     base="$(basename "$item")"
-    if [ "$base" = "history.jsonl" ] || [ "$base" = "sessions" ]; then
+    if [ "$base" = "history.jsonl" ] || [ "$base" = "sessions" ] || [ "$base" = "shell_snapshots" ]; then
       continue
     fi
     cp -a "$item" "$SHADOW_CODEX_HOME"/
   done
   shopt -u dotglob nullglob
 fi
+# Rewrite known host-absolute symlinks to the corresponding in-container mounts.
+# This preserves shared assets such as ~/.claude/skills/* instead of deleting
+# them or leaving them pointed at macOS-only /Users/... paths.
+while IFS= read -r link_path; do
+  target="$(readlink "$link_path" || true)"
+  case "$target" in
+    /Users/*/.claude/*)
+      rel="${target#*/.claude/}"
+      mapped="/root/.claude/$rel"
+      ln -snf "$mapped" "$link_path"
+      ;;
+    /Users/*/.codex/*)
+      rel="${target#*/.codex/}"
+      mapped="/root/.codex/$rel"
+      ln -snf "$mapped" "$link_path"
+      ;;
+  esac
+done < <(find "$SHADOW_CODEX_HOME" -type l 2>/dev/null)
 # Keep history and sessions persisted on host; symlink them into the shadow copy unless bind-mounted
 mkdir -p "$ORIG_CODEX_HOME"
 touch "$ORIG_CODEX_HOME/history.jsonl"
@@ -388,6 +410,9 @@ fi
 export CODEX_HOME="$SHADOW_CODEX_HOME"
 CODEX_CONFIG="$CODEX_HOME/config.toml"
 export CODEX_CONFIG
+# Ensure Codex generates Linux-valid shell state in the container, regardless
+# of what the host uses.
+export SHELL=/bin/bash
 
 if [ ! -f "$CODEX_CONFIG" ]; then
   cat > "$CODEX_CONFIG" << CODEXEOF
